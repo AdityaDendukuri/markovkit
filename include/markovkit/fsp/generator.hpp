@@ -1,12 +1,5 @@
 /// @file generator.hpp
 /// @brief CME generator matrix construction.
-///
-/// build_generator constructs the infinitesimal generator A of the CME
-/// restricted to the active state space.  Two modes are supported:
-///   - absorbing=false: closed form; probability is conserved (for AdaptiveFSP)
-///   - absorbing=true:  outgoing probability that leaves the active set is
-///                      absorbed into a sink; required for KrylovFSP mass criterion
-///                      (Vo & Sidje 2016).
 #pragma once
 
 #include "markovkit/fsp/state_space.hpp"
@@ -24,18 +17,50 @@ struct GeneratorResult {
 };
 
 /// @brief Build the CME generator restricted to sp.
-///
-/// @param sp          Active state space
-/// @param model       Reaction network
-/// @param rates       Rate parameters
-/// @param t           Current time
-/// @param absorbing   If true, diagonal counts ALL outgoing propensities (including
-///                    transitions to states outside sp), so probability leaks.
-///                    Required for the KrylovFSP mass-loss criterion.
-GeneratorResult build_generator(const StateSpace& sp,
-                                const ReactionSystem& model,
-                                const std::vector<double>& rates,
-                                double t,
-                                bool absorbing = false);
+inline GeneratorResult build_generator(const StateSpace& sp,
+                                        const ReactionSystem& model,
+                                        const std::vector<double>& rates,
+                                        double t,
+                                        bool absorbing = false) {
+    int n = sp.size();
+    std::vector<num::idx> rows, cols;
+    std::vector<double> vals;
+
+    std::vector<double> exit_rate_boundary(n, 0.0);
+    std::vector<double> diag(n, 0.0);
+
+    for (int i = 0; i < n; ++i) {
+        const auto& s = sp.states[i];
+        double total_exit = 0.0;
+
+        for (std::size_t r = 0; r < model.propensities.size(); ++r) {
+            double rate = model.propensities[r](s, rates, t);
+            if (rate <= 0.0) continue;
+            total_exit += rate;
+
+            MultiIndex nxt = s;
+            for (std::size_t c = 0; c < s.size(); ++c) nxt[c] += model.stoich_vecs[r][c];
+
+            auto it = sp.index.find(nxt);
+            if (it != sp.index.end()) {
+                int j = it->second;
+                rows.push_back((num::idx)j);
+                cols.push_back((num::idx)i);
+                vals.push_back(rate);
+                diag[i] += rate;
+            } else {
+                exit_rate_boundary[i] += rate;
+            }
+        }
+
+        double diag_val = absorbing ? -total_exit : -diag[i];
+        rows.push_back((num::idx)i);
+        cols.push_back((num::idx)i);
+        vals.push_back(diag_val);
+    }
+
+    num::SparseMatrix A = num::SparseMatrix::from_triplets((num::idx)n, (num::idx)n, rows, cols, vals);
+    return {std::move(A), std::move(exit_rate_boundary), std::move(diag)};
+}
 
 } // namespace fsp

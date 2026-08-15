@@ -3,42 +3,84 @@
 #include <cassert>
 #include <cmath>
 
-void test_exponential_fit() {
-    using namespace markovkit::else_solver;
-
-    num::Vector a{0.5, 0.5};
-    num::Vector b{1.0, 2.0};
-    double c = 0.5;
-
-    double t = exponential_fit(a, b, c);
-    double val = a[0] * std::exp(-t * b[0]) + a[1] * std::exp(-t * b[1]);
-    assert(std::abs(val - c) < 1e-6);
-    std::cout << "[PASS] ELSE exponential fit (t = " << t << ")\n";
-}
-
-void test_discrete_subnetwork() {
+void test_subnetwork_fundamental_matrix() {
     using namespace markovkit::else_solver;
 
     num::Matrix R(2, 2, 0.0);
     R(0, 0) = -2.0; R(0, 1) = 1.0;
     R(1, 0) = 1.0;  R(1, 1) = -2.0;
 
-    DiscreteReferenceSubnetwork sub;
-    sub.set_rate_matrix(R);
+    Subnetwork sub(R);
 
-    const auto& Z = sub.fundamental_matrix();
-    assert(Z.rows() == 2 && Z.cols() == 2);
-    assert(Z(0, 0) > 0.0);
+    // Z = -R^{-1} = 1/3 * [2 1; 1 2]
+    assert(std::abs(sub.Z(0, 0) - 2.0 / 3.0) < 1e-6);
+    assert(std::abs(sub.Z(0, 1) - 1.0 / 3.0) < 1e-6);
 
-    double t_esc = sub.escape_time(0);
-    assert(t_esc > 0.0);
-    std::cout << "[PASS] ELSE DiscreteReferenceSubnetwork escape time (t_esc = " << t_esc << ")\n";
+    std::cout << "[PASS] ELSE Subnetwork fundamental matrix Z = -R^{-1}\n";
+}
+
+void test_schur_rank1_shedding() {
+    using namespace markovkit::else_solver;
+
+    num::Matrix R(3, 3, 0.0);
+    R(0, 0) = -3.0; R(0, 1) = 1.0; R(0, 2) = 1.0;
+    R(1, 0) = 1.0;  R(1, 1) = -2.0; R(1, 2) = 0.0;
+    R(2, 0) = 1.0;  R(2, 1) = 0.0;  R(2, 2) = -2.0;
+
+    Subnetwork sub(R);
+    sub.shed_state(2); // Shed state 2
+
+    assert(sub.R.rows() == 2);
+    assert(sub.Z.rows() == 2);
+
+    std::cout << "[PASS] ELSE Schur rank-1 state shedding\n";
+}
+
+void test_talbot_fourier_resolvent() {
+    using namespace markovkit::else_solver;
+
+    num::Matrix R(2, 2, 0.0);
+    R(0, 0) = -2.0; R(0, 1) = 1.0;
+    R(1, 0) = 1.0;  R(1, 1) = -2.0;
+
+    num::Vector v{1.0, 0.0};
+    double t = 0.5;
+
+    num::Vector p_fourier = fourier_subnetwork_solve(R, v, t, 32);
+    num::operators::DenseOp Rop(R);
+    num::Vector p_expv = num::expv(t, Rop, v);
+
+    assert(std::abs(p_fourier[0] - p_expv[0]) < 1e-4);
+    assert(std::abs(p_fourier[1] - p_expv[1]) < 1e-4);
+
+    std::cout << "[PASS] ELSE Talbot Fourier contour resolvent solve matches expv!\n";
+}
+
+void test_ensemble_else() {
+    using namespace markovkit::else_solver;
+
+    num::Matrix R(2, 2, 0.0);
+    R(0, 0) = -2.0; R(0, 1) = 1.0;
+    R(1, 0) = 1.0;  R(1, 1) = -2.0;
+
+    Subnetwork sub(R);
+
+    // Simulate 100 concurrent stochastic trajectories sharing the subnetwork
+    auto res = ensemble_else_simulate(100, sub, 1.0, 42);
+
+    assert(res.n_trajectories == 100);
+    assert(res.final_states.size() == 100);
+    assert(res.exit_times.size() == 100);
+
+    std::cout << "[PASS] Ensemble ELSE (100 parallel trajectories sharing subnetwork)\n";
 }
 
 int main() {
-    std::cout << "--- Running ELSE Tests ---\n";
-    test_exponential_fit();
-    test_discrete_subnetwork();
-    std::cout << "All ELSE tests passed successfully!\n";
+    std::cout << "--- Running Unified ELSE Tests ---\n";
+    test_subnetwork_fundamental_matrix();
+    test_schur_rank1_shedding();
+    test_talbot_fourier_resolvent();
+    test_ensemble_else();
+    std::cout << "All Unified ELSE tests passed successfully!\n";
     return 0;
 }

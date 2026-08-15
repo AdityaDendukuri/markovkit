@@ -1,5 +1,5 @@
-/// @file fess.hpp
-/// @brief Finite Exact Subnetwork Solver (FESS) using num::resolvent_solve.
+/// @file else/fourier.hpp
+/// @brief Talbot contour Laplace inversion resolvent solver for subnetwork state propagation.
 #pragma once
 
 #include <numerics.hpp>
@@ -7,7 +7,7 @@
 #include <complex>
 #include <cmath>
 
-namespace markovkit::fess {
+namespace markovkit::else_solver {
 
 using Complex = std::complex<double>;
 
@@ -72,4 +72,4 @@ inline num::Vector fourier_subnetwork_solve(const num::Matrix& R, const num::Vec
     return result;
 }
 
-} // namespace markovkit::fess
+} // namespace markovkit::else_solver
