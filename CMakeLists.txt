@@ -32,6 +32,8 @@ add_library(markovkit
     src/else/fourier.cpp
     src/else/ensemble.cpp
     src/else/exponential_fit.cpp
+    src/ssa/gillespie.cpp
+    src/ssa/tau_leaping.cpp
 )
 
 add_library(markovkit::markovkit ALIAS markovkit)
