@@ -6,3 +6,6 @@ target_link_libraries(plot_gene_expression PRIVATE markovkit::markovkit)
 
 add_executable(oregonator_example oregonator_example.cpp)
 target_link_libraries(oregonator_example PRIVATE markovkit::markovkit)
+
+add_executable(toggle_switch_example toggle_switch_example.cpp)
+target_link_libraries(toggle_switch_example PRIVATE markovkit::markovkit)
