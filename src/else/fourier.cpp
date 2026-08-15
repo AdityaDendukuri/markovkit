@@ -1,5 +1,5 @@
 /// @file src/else/fourier.cpp
-/// @brief Compiled Talbot contour resolvent Laplace inversion routines using num::cplx.
+/// @brief Compiled Talbot contour resolvent Laplace inversion routines using num::resolvent_solve_batch.
 #include "markovkit/else/fourier.hpp"
 
 namespace markovkit::else_solver {
@@ -44,11 +44,17 @@ num::Vector fourier_subnetwork_solve(const num::Matrix& R, const num::Vector& v,
     num::Vector result(n, 0.0);
 
     auto nodes = talbot_nodes(N, t);
+    std::vector<num::cplx> shifts(nodes.size());
+    for (std::size_t k = 0; k < nodes.size(); ++k) shifts[k] = nodes[k].s;
 
-    for (const auto& node : nodes) {
-        std::vector<num::cplx> sol = num::resolvent_solve(node.s, R, v);
+    // Offload batched complex resolvent solves to numerics: (s_k I - R)^{-1} v
+    auto batch_solutions = num::resolvent_solve_batch(shifts, R, v);
+
+    for (std::size_t k = 0; k < nodes.size(); ++k) {
+        const auto& sol = batch_solutions[k];
+        num::cplx w = nodes[k].w;
         for (num::idx i = 0; i < n; ++i) {
-            num::cplx contrib = node.w * sol[i];
+            num::cplx contrib = w * sol[i];
             result[i] += contrib.real();
         }
     }

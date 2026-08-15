@@ -1,6 +1,10 @@
 /// @file src/else/ensemble.cpp
-/// @brief Compiled Ensemble ELSE solver.
+/// @brief Compiled Ensemble ELSE solver with OpenMP multi-threading.
 #include "markovkit/else/ensemble.hpp"
+
+#if defined(_OPENMP)
+#include <omp.h>
+#endif
 
 namespace markovkit::else_solver {
 
@@ -11,8 +15,6 @@ EnsembleResult ensemble_else_simulate(
     int rng_seed
 ) {
     num::idx n_states = subnetwork.R.rows();
-    std::mt19937 rng(rng_seed);
-    std::uniform_real_distribution<double> dist(0.0, 1.0);
 
     EnsembleResult res;
     res.n_trajectories = static_cast<int>(n_trajectories);
@@ -20,7 +22,13 @@ EnsembleResult ensemble_else_simulate(
     res.final_states.resize(n_trajectories, 0);
     res.exit_times.resize(n_trajectories, 0.0);
 
+#if defined(_OPENMP)
+#pragma omp parallel for schedule(dynamic)
+#endif
     for (std::size_t k = 0; k < n_trajectories; ++k) {
+        std::mt19937 rng(rng_seed + static_cast<int>(k));
+        std::uniform_real_distribution<double> dist(0.0, 1.0);
+
         int state = 0;
         double t = 0.0;
 
