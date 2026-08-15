@@ -1,6 +1,7 @@
 /// @file src/else/subnetwork.cpp
 /// @brief Compiled Subnetwork methods fully delegating linear algebra to numerics routines.
 #include "markovkit/else/subnetwork.hpp"
+#include <kernel/dense.hpp>
 
 namespace markovkit::else_solver {
 
@@ -76,22 +77,24 @@ void Subnetwork::shed_state(num::idx k) {
     double z_kk = Z(k, k);
     if (std::abs(z_kk) < 1e-14) throw std::runtime_error("shed_state: Z(k,k) is zero");
 
-    num::Matrix Z_new(n - 1, n - 1, 0.0);
-    for (num::idx i = 0, ni = 0; i < n; ++i) {
-        if (i == k) continue;
-        for (num::idx j = 0, nj = 0; j < n; ++j) {
-            if (j == k) continue;
-            Z_new(ni, nj) = Z(i, j) - (Z(i, k) * Z(k, j)) / z_kk;
-            ++nj;
-        }
-        ++ni;
+    // Extract column k and row k of Z
+    num::Vector z_col(n), z_row(n);
+    for (num::idx i = 0; i < n; ++i) {
+        z_col[i] = Z(i, k);
+        z_row[i] = Z(k, i);
     }
 
+    // Rank-1 outer-product update via num::kernel::dense::ger (BLAS cblas_dger / CUDA ger): Z <- Z - (1/z_kk) * z_col * z_row^T
+    num::kernel::dense::ger(-1.0 / z_kk, z_col, z_row, Z);
+
+    // Compress Z and R by dropping index k
+    num::Matrix Z_new(n - 1, n - 1, 0.0);
     num::Matrix R_new(n - 1, n - 1, 0.0);
     for (num::idx i = 0, ni = 0; i < n; ++i) {
         if (i == k) continue;
         for (num::idx j = 0, nj = 0; j < n; ++j) {
             if (j == k) continue;
+            Z_new(ni, nj) = Z(i, j);
             R_new(ni, nj) = R(i, j);
             ++nj;
         }
