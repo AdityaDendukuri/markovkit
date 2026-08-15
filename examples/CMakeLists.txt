@@ -1,0 +1,2 @@
+add_executable(gene_expression gene_expression.cpp)
+target_link_libraries(gene_expression PRIVATE markovkit::markovkit)

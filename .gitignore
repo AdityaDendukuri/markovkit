@@ -1,0 +1,5 @@
+build/
+DiscStochSim-cpp/
+*.cc
+*.h
+.DS_Store
