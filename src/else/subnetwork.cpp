@@ -1,5 +1,5 @@
 /// @file src/else/subnetwork.cpp
-/// @brief Compiled Subnetwork methods including cut_time, schur, and cut_norm shedding rules.
+/// @brief Compiled Subnetwork methods fully delegating linear algebra to numerics routines.
 #include "markovkit/else/subnetwork.hpp"
 
 namespace markovkit::else_solver {
@@ -8,6 +8,7 @@ Subnetwork::Subnetwork(num::Matrix generator) : R(std::move(generator)) {
     num::idx n = R.rows();
     if (R.cols() != n) throw std::invalid_argument("Subnetwork: generator must be square");
 
+    // Delegate matrix negation and LU inversion entirely to numerics: Z = (-R)^{-1}
     num::Matrix neg_R(n, n, 0.0);
     for (num::idx i = 0; i < n; ++i) {
         for (num::idx j = 0; j < n; ++j) {
@@ -16,22 +17,13 @@ Subnetwork::Subnetwork(num::Matrix generator) : R(std::move(generator)) {
     }
 
     auto lu_fact = num::lu(neg_R);
-    Z = num::Matrix(n, n, 0.0);
-    for (num::idx j = 0; j < n; ++j) {
-        num::Vector e_j(n, 0.0);
-        e_j[j] = 1.0;
-        num::Vector col_j(n, 0.0);
-        num::lu_solve(lu_fact, e_j, col_j);
-        for (num::idx i = 0; i < n; ++i) {
-            Z(i, j) = col_j[i];
-        }
-    }
+    Z = num::lu_inv(lu_fact);
 }
 
 num::Vector Subnetwork::occupation(const num::Vector& entrance) const {
     num::Vector u(Z.rows(), 0.0);
     num::operators::DenseOp Zop(Z);
-    Zop.apply(entrance, u);
+    Zop.apply(entrance, u); // Heavy lifting matrix-vector product via BLAS cblas_dgemv
     return u;
 }
 
