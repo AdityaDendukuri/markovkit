@@ -11,11 +11,6 @@ int main() {
     using namespace markovkit::else_solver;
 
     // 1. Define Tian-Burrage Genetic Toggle Switch Reaction System:
-    // Reactions:
-    //   1) 0 -> U           (Hill repression by V)
-    //   2) U -> 0           (U degradation)
-    //   3) 0 -> V           (Hill repression by U)
-    //   4) V -> 0           (V degradation)
     ReactionSystem sys;
     sys.stoich_vecs = {
         MultiIndex{1, 0},
@@ -108,6 +103,9 @@ int main() {
     auto ens = ensemble_else_simulate(100, sub, 10.0, 42);
     std::cout << "   Ensemble ELSE simulated " << ens.n_trajectories << " parallel stochastic paths.\n";
 
+    std::vector<double> traj_indices(ens.n_trajectories);
+    for (int i = 0; i < ens.n_trajectories; ++i) traj_indices[i] = static_cast<double>(i + 1);
+
     // 5. Generate 4-panel summary plot using num::plt (gnuplot wrapper)
     num::plt::subplot(2, 2);
 
@@ -120,10 +118,9 @@ int main() {
 
     // Panel (b): Mean U and V trajectories
     num::plt::plot(time_points, mean_U, "<U>", "lines lw 2");
-    num::plt::title("(b) Mean U and V Population");
+    num::plt::title("(b) Mean U Population");
     num::plt::xlabel("Time");
     num::plt::ylabel("Mean Count");
-    num::plt::legend();
     num::plt::next();
 
     // Panel (c): U-V Phase Space Trajectory
@@ -133,8 +130,8 @@ int main() {
     num::plt::ylabel("<V>");
     num::plt::next();
 
-    // Panel (d): Ensemble ELSE Exit Times Histogram/Distribution
-    num::plt::plot(ens.exit_times, ens.exit_times, "Ensemble Paths", "points pt 7 ps 0.8");
+    // Panel (d): Ensemble ELSE Exit Times
+    num::plt::plot(traj_indices, ens.exit_times, "Exit Times", "points pt 7 ps 0.8");
     num::plt::title("(d) Ensemble ELSE Exit Times");
     num::plt::xlabel("Trajectory Index");
     num::plt::ylabel("Exit Time");

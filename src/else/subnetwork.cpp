@@ -29,13 +29,9 @@ Subnetwork::Subnetwork(num::Matrix generator) : R(std::move(generator)) {
 }
 
 num::Vector Subnetwork::occupation(const num::Vector& entrance) const {
-    num::idx n = Z.rows();
-    num::Vector u(n, 0.0);
-    for (num::idx i = 0; i < n; ++i) {
-        for (num::idx j = 0; j < n; ++j) {
-            u[i] += Z(i, j) * entrance[j];
-        }
-    }
+    num::Vector u(Z.rows(), 0.0);
+    num::operators::DenseOp Zop(Z);
+    Zop.apply(entrance, u);
     return u;
 }
 
