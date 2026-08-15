@@ -1,5 +1,5 @@
 /// @file src/else/subnetwork.cpp
-/// @brief Compiled Subnetwork methods.
+/// @brief Compiled Subnetwork methods including cut_time, schur, and cut_norm shedding rules.
 #include "markovkit/else/subnetwork.hpp"
 
 namespace markovkit::else_solver {
@@ -26,6 +26,59 @@ Subnetwork::Subnetwork(num::Matrix generator) : R(std::move(generator)) {
             Z(i, j) = col_j[i];
         }
     }
+}
+
+num::Vector Subnetwork::occupation(const num::Vector& entrance) const {
+    num::idx n = Z.rows();
+    num::Vector u(n, 0.0);
+    for (num::idx i = 0; i < n; ++i) {
+        for (num::idx j = 0; j < n; ++j) {
+            u[i] += Z(i, j) * entrance[j];
+        }
+    }
+    return u;
+}
+
+std::vector<double> Subnetwork::cut_time_losses(const num::Vector& entrance) const {
+    num::idx n = Z.rows();
+    num::Vector u = occupation(entrance);
+
+    std::vector<double> losses(n, 0.0);
+    for (num::idx k = 0; k < n; ++k) {
+        double col_sum = 0.0;
+        for (num::idx j = 0; j < n; ++j) {
+            col_sum += Z(j, k);
+        }
+        double z_kk = Z(k, k);
+        losses[k] = (z_kk > 0.0) ? (u[k] * col_sum / z_kk) : 0.0;
+    }
+    return losses;
+}
+
+std::vector<double> Subnetwork::schur_losses(const num::Vector& entrance) const {
+    num::idx n = Z.rows();
+    num::Vector u = occupation(entrance);
+
+    std::vector<double> losses(n, 0.0);
+    for (num::idx k = 0; k < n; ++k) {
+        double z_kk = Z(k, k);
+        losses[k] = (z_kk > 0.0) ? (u[k] / z_kk) : 0.0;
+    }
+    return losses;
+}
+
+std::vector<double> Subnetwork::cut_norm_losses(const num::Vector& entrance) const {
+    num::idx n = Z.rows();
+    num::Vector u = occupation(entrance);
+
+    std::vector<double> losses(n, 0.0);
+    for (num::idx k = 0; k < n; ++k) {
+        double z_kk = Z(k, k);
+        double col_sum = 0.0;
+        for (num::idx j = 0; j < n; ++j) col_sum += Z(j, k);
+        losses[k] = (z_kk > 0.0) ? (u[k] * std::sqrt(col_sum) / z_kk) : 0.0;
+    }
+    return losses;
 }
 
 void Subnetwork::shed_state(num::idx k) {

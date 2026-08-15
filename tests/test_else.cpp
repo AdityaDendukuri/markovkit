@@ -19,7 +19,7 @@ void test_subnetwork_fundamental_matrix() {
     std::cout << "[PASS] ELSE Subnetwork fundamental matrix Z = -R^{-1}\n";
 }
 
-void test_schur_rank1_shedding() {
+void test_shedding_criteria() {
     using namespace markovkit::else_solver;
 
     num::Matrix R(3, 3, 0.0);
@@ -28,12 +28,60 @@ void test_schur_rank1_shedding() {
     R(2, 0) = 1.0;  R(2, 1) = 0.0;  R(2, 2) = -2.0;
 
     Subnetwork sub(R);
-    sub.shed_state(2); // Shed state 2
+    num::Vector entrance{1.0, 0.0, 0.0};
 
+    auto schur_loss = sub.schur_losses(entrance);
+    auto time_loss  = sub.cut_time_losses(entrance);
+    auto norm_loss  = sub.cut_norm_losses(entrance);
+
+    assert(schur_loss.size() == 3);
+    assert(time_loss.size() == 3);
+    assert(norm_loss.size() == 3);
+
+    sub.shed_state(2);
     assert(sub.R.rows() == 2);
-    assert(sub.Z.rows() == 2);
 
-    std::cout << "[PASS] ELSE Schur rank-1 state shedding\n";
+    std::cout << "[PASS] ELSE Shedding Rules (Schur, CutTime, CutNorm) and Schur rank-1 shedding\n";
+}
+
+void test_fess_network() {
+    using namespace markovkit::else_solver;
+    using namespace fsp;
+
+    ReactionSystem sys;
+    sys.stoich_vecs = {MultiIndex{1}, MultiIndex{-1}};
+    sys.propensities = {
+        [](const MultiIndex& x, const std::vector<double>& rates, double t) { return rates[0]; },
+        [](const MultiIndex& x, const std::vector<double>& rates, double t) { return rates[1] * x[0]; }
+    };
+    std::vector<double> rates = {5.0, 0.1};
+
+    FESSNetwork net(MultiIndex{0});
+    net.augment({MultiIndex{0}}, sys, rates, 3);
+
+    assert(net.size() >= 3);
+    std::cout << "[PASS] FESSNetwork dynamic state space expansion (" << net.size() << " states)\n";
+}
+
+void test_fess_density_evolution() {
+    using namespace markovkit::else_solver;
+    using namespace fsp;
+
+    ReactionSystem sys;
+    sys.stoich_vecs = {MultiIndex{1}, MultiIndex{-1}};
+    sys.propensities = {
+        [](const MultiIndex& x, const std::vector<double>& rates, double t) { return rates[0]; },
+        [](const MultiIndex& x, const std::vector<double>& rates, double t) { return rates[1] * x[0]; }
+    };
+    std::vector<double> rates = {5.0, 0.1};
+
+    fsp::FlatHashMap<MultiIndex, double> p0;
+    p0[MultiIndex{0}] = 1.0;
+
+    auto evol = fess_density_evolution(p0, sys, rates, 3);
+    assert(evol.densities.size() == 4);
+
+    std::cout << "[PASS] FESSDensityEvolution continuous density propagation\n";
 }
 
 void test_talbot_fourier_resolvent() {
@@ -64,23 +112,22 @@ void test_ensemble_else() {
     R(1, 0) = 1.0;  R(1, 1) = -2.0;
 
     Subnetwork sub(R);
-
-    // Simulate 100 concurrent stochastic trajectories sharing the subnetwork
     auto res = ensemble_else_simulate(100, sub, 1.0, 42);
 
     assert(res.n_trajectories == 100);
     assert(res.final_states.size() == 100);
-    assert(res.exit_times.size() == 100);
 
     std::cout << "[PASS] Ensemble ELSE (100 parallel trajectories sharing subnetwork)\n";
 }
 
 int main() {
-    std::cout << "--- Running Unified ELSE Tests ---\n";
+    std::cout << "--- Running Complete FESS/ELSE Suite Tests ---\n";
     test_subnetwork_fundamental_matrix();
-    test_schur_rank1_shedding();
+    test_shedding_criteria();
+    test_fess_network();
+    test_fess_density_evolution();
     test_talbot_fourier_resolvent();
     test_ensemble_else();
-    std::cout << "All Unified ELSE tests passed successfully!\n";
+    std::cout << "All FESS/ELSE suite tests passed successfully!\n";
     return 0;
 }

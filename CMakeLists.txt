@@ -27,6 +27,8 @@ add_library(markovkit
     src/fsp/solvers/adaptive_fsp.cpp
     src/fsp/solvers/krylov_fsp.cpp
     src/else/subnetwork.cpp
+    src/else/network.cpp
+    src/else/density.cpp
     src/else/fourier.cpp
     src/else/ensemble.cpp
     src/else/exponential_fit.cpp
