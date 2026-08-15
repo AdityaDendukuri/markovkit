@@ -20,16 +20,26 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(approxchol)
 
-# Header-Only Interface Target
-add_library(markovkit INTERFACE)
+# Precompiled Static Library Target
+add_library(markovkit
+    src/fsp/state_space.cpp
+    src/fsp/generator.cpp
+    src/fsp/solvers/adaptive_fsp.cpp
+    src/fsp/solvers/krylov_fsp.cpp
+    src/else/subnetwork.cpp
+    src/else/fourier.cpp
+    src/else/ensemble.cpp
+    src/else/exponential_fit.cpp
+)
+
 add_library(markovkit::markovkit ALIAS markovkit)
 
-target_include_directories(markovkit INTERFACE
+target_include_directories(markovkit PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(markovkit INTERFACE
+target_link_libraries(markovkit PUBLIC
     numerics::numerics
     approxchol
 )
