@@ -1,14 +1,20 @@
 # examples/CMakeLists.txt
-# Auto-discovers all *.cpp example files and creates executable targets linked to markovkit::markovkit.
-# Also creates a custom meta-target 'markovkit_examples' to build all examples at once.
-
-file(GLOB EXAMPLE_SOURCES CONFIGURE_DEPENDS "*.cpp")
-
+# Umbrella target to build all examples: cmake --build build --target markovkit_examples
 add_custom_target(markovkit_examples ALL)
 
-foreach(SRC ${EXAMPLE_SOURCES})
-    get_filename_component(TARGET_NAME ${SRC} NAME_WE)
-    add_executable(${TARGET_NAME} ${SRC})
+# Helper function to register an example target with full control
+function(add_markovkit_example TARGET_NAME SOURCE_FILE)
+    add_executable(${TARGET_NAME} ${SOURCE_FILE} ${ARGN})
     target_link_libraries(${TARGET_NAME} PRIVATE markovkit::markovkit)
     add_dependencies(markovkit_examples ${TARGET_NAME})
-endforeach()
+endfunction()
+
+# ==============================================================================
+# Explicitly Registered Showcase Examples
+# Add your custom example target here!
+# ==============================================================================
+
+add_markovkit_example(gene_expression        gene_expression.cpp)
+add_markovkit_example(plot_gene_expression   plot_gene_expression.cpp)
+add_markovkit_example(oregonator_example     oregonator_example.cpp)
+add_markovkit_example(toggle_switch_example  toggle_switch_example.cpp)
