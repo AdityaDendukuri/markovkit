@@ -1,6 +1,6 @@
 /// @file toggle_switch_example.cpp
 /// @brief Reproduction of the Tian-Burrage Genetic Toggle Switch Rare-Event Trajectory Figure:
-/// Direct SSA (Trapped in initial basin) vs Multiple ELSE (Visiting low-probability V-high basin).
+/// Direct SSA (Trapped in initial basin) vs Shared Expected-Visits ELSE (Visiting low-probability V-high basin).
 #include <cmath>
 #include <iostream>
 #include <markovkit.hpp>
@@ -9,73 +9,70 @@
 
 int main() {
   std::cout << "=== MarkovKit: Tian-Burrage Genetic Toggle Switch Trajectory Comparison ===\n";
-  std::cout << "Comparing Direct SSA vs Multiple ELSE Trajectory in 2D State Space (U, V)...\n\n";
+  std::cout << "Comparing Direct SSA vs Shared Expected-Visits ELSE in 2D State Space (U, V)...\n\n";
 
   using namespace fsp;
   using namespace markovkit::else_solver;
   using namespace markovkit::ssa;
 
-  // 1. Define Tian-Burrage Genetic Toggle Switch Reaction System (scale_factor = 0.2 from
-  // DiscStochSim):
+  // 1. Define Tian-Burrage Genetic Toggle Switch Reaction System (scale_factor = 0.2 from DiscStochSim):
   ReactionSystem sys;
   sys.stoich_vecs = {MultiIndex{1, 0}, MultiIndex{-1, 0}, MultiIndex{0, 1}, MultiIndex{0, -1}};
 
   double scale_factor = 0.2;
   std::vector<double> rates = {
-      1.0,                  // eta
-      20.0 * scale_factor,  // alpha1 = 4.0
-      400.0 * scale_factor, // beta1  = 80.0
-      100.0 * scale_factor, // K1     = 20.0
-      1.0,                  // d1
-      0.1 / 1.1,            // dU     = 0.0909
-      20.0 * scale_factor,  // alpha2 = 4.0
-      400.0 * scale_factor, // beta2  = 80.0
-      100.0 * scale_factor, // K2     = 20.0
-      1.0                   // d2
+      1.0,                    // eta
+      20.0 * scale_factor,    // alpha1 = 4.0
+      400.0 * scale_factor,   // beta1  = 80.0
+      100.0 * scale_factor,   // K1     = 20.0
+      1.0,                    // d1
+      0.1 / 1.1,              // dU     = 0.0909
+      20.0 * scale_factor,    // alpha2 = 4.0
+      400.0 * scale_factor,   // beta2  = 80.0
+      100.0 * scale_factor,   // K2     = 20.0
+      1.0                     // d2
   };
 
-  sys.propensities = {[](const MultiIndex& x, const std::vector<double>& r, double t) {
-                        double v = static_cast<double>(x[1]);
-                        double k3 = r[3] * r[3] * r[3];
-                        return r[0] * (r[1] + r[2] * k3 / (k3 + v * v * v));
-                      },
-                      [](const MultiIndex& x, const std::vector<double>& r, double t) {
-                        return (r[4] + r[5]) * static_cast<double>(x[0]);
-                      },
-                      [](const MultiIndex& x, const std::vector<double>& r, double t) {
-                        double u = static_cast<double>(x[0]);
-                        double k8 = r[8] * r[8] * r[8];
-                        return r[0] * (r[6] + r[7] * k8 / (k8 + u * u * u));
-                      },
-                      [](const MultiIndex& x, const std::vector<double>& r, double t) {
-                        return r[9] * static_cast<double>(x[1]);
-                      }};
+  sys.propensities = {
+      [](const MultiIndex &x, const std::vector<double> &r, double t) {
+        double v = static_cast<double>(x[1]);
+        double k3 = r[3] * r[3] * r[3];
+        return r[0] * (r[1] + r[2] * k3 / (k3 + v * v * v));
+      },
+      [](const MultiIndex &x, const std::vector<double> &r, double t) {
+        return (r[4] + r[5]) * static_cast<double>(x[0]);
+      },
+      [](const MultiIndex &x, const std::vector<double> &r, double t) {
+        double u = static_cast<double>(x[0]);
+        double k8 = r[8] * r[8] * r[8];
+        return r[0] * (r[6] + r[7] * k8 / (k8 + u * u * u));
+      },
+      [](const MultiIndex &x, const std::vector<double> &r, double t) {
+        return r[9] * static_cast<double>(x[1]);
+      }};
 
   MultiIndex initial_state{17, 1};
   double tf = 500.0;
 
   // 2. Direct SSA Simulation (seed = 66 matching generate_trajectory_figures.jl)
-  std::cout << "1. Simulating Direct SSA (Gillespie) trajectory starting at (17,1) to tf=" << tf
-            << "...\n";
+  std::cout << "1. Simulating Direct SSA (Gillespie) trajectory starting at (17,1) to tf=" << tf << "...\n";
   SSATrajectory ssa_traj = gillespie_direct_simulate(sys, rates, initial_state, 0.0, tf, 66);
   std::cout << "   Direct SSA completed in " << ssa_traj.t.size() << " steps.\n";
 
   std::vector<double> ssa_U, ssa_V;
-  for (const auto& state : ssa_traj.x) {
+  for (const auto &state : ssa_traj.x) {
     ssa_U.push_back(static_cast<double>(state[0]));
     ssa_V.push_back(static_cast<double>(state[1]));
   }
 
-  // 3. Expected-Visits ELSE Switching Trajectory Simulation (Fundamental Matrix Z = -Q^-1, No expv)
-  std::cout << "2. Simulating Expected-Visits ELSE switching trajectory (Z = -Q^-1) across rare "
-               "saddle to tf="
-            << tf << "...\n";
+  // 3. Shared Expected-Visits ELSE Simulation (seed = 66 matching generate_trajectory_figures.jl)
+  std::cout << "2. Simulating Shared Expected-Visits ELSE trajectory (seed = 66) to tf=" << tf << "...\n";
   ELSETrajectory else_traj = else_trajectory_simulate(sys, rates, initial_state, 0.0, tf, 3, 66);
   std::cout << "   Multiple ELSE completed in " << else_traj.number_of_else_steps << " ELSE steps ("
             << else_traj.t.size() << " trajectory points).\n";
 
   std::vector<double> else_U, else_V;
-  for (const auto& state : else_traj.x) {
+  for (const auto &state : else_traj.x) {
     else_U.push_back(static_cast<double>(state[0]));
     else_V.push_back(static_cast<double>(state[1]));
   }
@@ -106,7 +103,7 @@ int main() {
     num::plt::plot(start_U, start_V, "Start (17,1)", "points pt 7 ps 1.2");
     num::plt::plot(basin_U_high_U, basin_U_high_V, "U-high (76,5)", "points pt 9 ps 1.2");
     num::plt::plot(basin_V_high_U, basin_V_high_V, "V-high (5,83)", "points pt 13 ps 1.2");
-    num::plt::title("(b) Expected-Visits ELSE: Visits Low-Prob Basin");
+    num::plt::title("(b) Shared Expected-Visits ELSE: Visits Low-Prob Basin");
     num::plt::xlabel("U Molecule Count");
     num::plt::ylabel("V Molecule Count");
     num::plt::xlim(0, 105);
@@ -122,7 +119,6 @@ int main() {
   build_figure();
   num::plt::show_dumb(140, 35);
 
-  std::cout << "\nTian-Burrage Toggle Switch Rare-Event Trajectory Reproduction Completed "
-               "Successfully!\n";
+  std::cout << "\nTian-Burrage Toggle Switch Rare-Event Trajectory Reproduction Completed Successfully!\n";
   return 0;
 }

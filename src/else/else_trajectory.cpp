@@ -22,8 +22,12 @@ ELSETrajectory else_trajectory_simulate(const fsp::ReactionSystem& model,
 
   double current_time = t0;
   fsp::MultiIndex current_state = u0;
+  int step_count = 0;
+  const int max_steps = 10000;
 
-  while (current_time < tf) {
+  while (current_time < tf && step_count < max_steps) {
+    step_count++;
+
     // 1. Build local subnetwork around current_state with L1 Manhattan radius
     std::vector<fsp::MultiIndex> states;
     std::map<fsp::MultiIndex, num::idx> state_map;
@@ -86,7 +90,8 @@ ELSETrajectory else_trajectory_simulate(const fsp::ReactionSystem& model,
     num::idx start_idx = state_map[current_state];
     double mean_exit_time = 0.0;
     for (num::idx j = 0; j < n_sub; ++j) {
-      mean_exit_time += Z(start_idx, j);
+      double z_val = Z(start_idx, j);
+      if (z_val > 0.0) mean_exit_time += z_val;
     }
 
     if (mean_exit_time <= 1e-14 || std::isnan(mean_exit_time)) break;
@@ -95,16 +100,18 @@ ELSETrajectory else_trajectory_simulate(const fsp::ReactionSystem& model,
     double u_rand = u_dist(rng);
     while (u_rand <= 1e-12) u_rand = u_dist(rng);
     double waiting_time = -mean_exit_time * std::log(u_rand);
+    if (waiting_time <= 0.0 || std::isnan(waiting_time)) waiting_time = 1e-5;
 
     if (current_time + waiting_time > tf) {
       break;
     }
 
-    // 4. Sample pre-exit state using exit_rates * Z(start_idx, i)
+    // 4. Sample pre-exit state using exit_rates * max(0, Z(start_idx, i))
     std::vector<double> preexit_weights(n_sub, 0.0);
     double total_exit_weight = 0.0;
     for (num::idx i = 0; i < n_sub; ++i) {
-      preexit_weights[i] = exit_rates[i] * Z(start_idx, i);
+      double z_val = std::max(0.0, Z(start_idx, i));
+      preexit_weights[i] = exit_rates[i] * z_val;
       total_exit_weight += preexit_weights[i];
     }
 
@@ -150,6 +157,8 @@ ELSETrajectory else_trajectory_simulate(const fsp::ReactionSystem& model,
           break;
         }
       }
+    } else {
+      break;
     }
 
     current_time += waiting_time;
