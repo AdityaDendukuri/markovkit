@@ -9,8 +9,9 @@
 namespace markovkit::else_solver {
 
 EnsembleResult ensemble_else_simulate(std::size_t n_trajectories,
-                                      const Subnetwork &subnetwork,
-                                      double t_max, int rng_seed) {
+                                      const Subnetwork& subnetwork,
+                                      double t_max,
+                                      int rng_seed) {
   num::idx n_states = subnetwork.R.rows();
 
   EnsembleResult res;

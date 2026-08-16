@@ -4,10 +4,12 @@
 
 namespace markovkit::else_solver {
 
-FESSDensityEvolution fess_density_evolution(
-    const fsp::FlatHashMap<fsp::MultiIndex, double> &initial_density,
-    const fsp::ReactionSystem &model, const std::vector<double> &rates,
-    int steps, FESSOptions options) {
+FESSDensityEvolution
+fess_density_evolution(const fsp::FlatHashMap<fsp::MultiIndex, double>& initial_density,
+                       const fsp::ReactionSystem& model,
+                       const std::vector<double>& rates,
+                       int steps,
+                       FESSOptions options) {
   FESSDensityEvolution evol;
   evol.densities.push_back(initial_density);
   evol.expected_times.push_back(0.0);
@@ -19,7 +21,7 @@ FESSDensityEvolution fess_density_evolution(
 
   for (int step = 0; step < steps; ++step) {
     std::vector<fsp::MultiIndex> entrances;
-    for (const auto &kv : current_density)
+    for (const auto& kv : current_density)
       entrances.push_back(kv.first);
 
     FESSNetwork net(entrances);
@@ -28,7 +30,7 @@ FESSDensityEvolution fess_density_evolution(
     int n = net.size();
     num::Matrix R(n, n, 0.0);
     for (int c = 0; c < n; ++c) {
-      const auto &state = net.states[c];
+      const auto& state = net.states[c];
       double total_rate = 0.0;
       for (std::size_t r = 0; r < model.propensities.size(); ++r) {
         double rate = model.propensities[r](state, rates, current_time);

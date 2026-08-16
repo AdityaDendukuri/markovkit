@@ -9,11 +9,11 @@ FESSNetwork::FESSNetwork(fsp::MultiIndex initial_state) {
 }
 
 FESSNetwork::FESSNetwork(std::vector<fsp::MultiIndex> initial_states) {
-  for (const auto &s : initial_states)
+  for (const auto& s : initial_states)
     augment(s);
 }
 
-int FESSNetwork::augment(const fsp::MultiIndex &state) {
+int FESSNetwork::augment(const fsp::MultiIndex& state) {
   auto it = index.find(state);
   if (it != index.end())
     return it->second;
@@ -24,17 +24,18 @@ int FESSNetwork::augment(const fsp::MultiIndex &state) {
   return new_idx;
 }
 
-void FESSNetwork::augment(const std::vector<fsp::MultiIndex> &entrances,
-                          const fsp::ReactionSystem &model,
-                          const std::vector<double> &rates, int depth) {
+void FESSNetwork::augment(const std::vector<fsp::MultiIndex>& entrances,
+                          const fsp::ReactionSystem& model,
+                          const std::vector<double>& rates,
+                          int depth) {
   std::vector<fsp::MultiIndex> frontier = entrances;
-  for (const auto &s : frontier)
+  for (const auto& s : frontier)
     augment(s);
 
   for (int d = 0; d < depth; ++d) {
     std::vector<fsp::MultiIndex> next_frontier;
-    for (const auto &state : frontier) {
-      for (const auto &change : model.stoich_vecs) {
+    for (const auto& state : frontier) {
+      for (const auto& change : model.stoich_vecs) {
         fsp::MultiIndex dest = state;
         bool valid = true;
         for (std::size_t i = 0; i < state.size(); ++i) {

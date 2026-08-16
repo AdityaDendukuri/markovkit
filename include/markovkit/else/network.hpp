@@ -18,16 +18,21 @@ struct FESSNetwork {
   explicit FESSNetwork(fsp::MultiIndex initial_state);
   explicit FESSNetwork(std::vector<fsp::MultiIndex> initial_states);
 
-  int size() const { return static_cast<int>(states.size()); }
-  bool empty() const { return states.empty(); }
+  int size() const {
+    return static_cast<int>(states.size());
+  }
+  bool empty() const {
+    return states.empty();
+  }
 
   /// @brief Augment network with single state. Returns index.
-  int augment(const fsp::MultiIndex &state);
+  int augment(const fsp::MultiIndex& state);
 
   /// @brief Add depth reaction-graph shells around entrance states
-  void augment(const std::vector<fsp::MultiIndex> &entrances,
-               const fsp::ReactionSystem &model,
-               const std::vector<double> &rates, int depth = 1);
+  void augment(const std::vector<fsp::MultiIndex>& entrances,
+               const fsp::ReactionSystem& model,
+               const std::vector<double>& rates,
+               int depth = 1);
 };
 
 } // namespace markovkit::else_solver

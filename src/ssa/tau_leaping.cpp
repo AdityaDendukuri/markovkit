@@ -4,10 +4,12 @@
 
 namespace markovkit::ssa {
 
-SSATrajectory tau_leaping_simulate(const fsp::ReactionSystem &model,
-                                   const std::vector<num::real> &rates,
-                                   const fsp::MultiIndex &u0, num::real t0,
-                                   num::real tf, TauLeapingParams params,
+SSATrajectory tau_leaping_simulate(const fsp::ReactionSystem& model,
+                                   const std::vector<num::real>& rates,
+                                   const fsp::MultiIndex& u0,
+                                   num::real t0,
+                                   num::real tf,
+                                   TauLeapingParams params,
                                    int rng_seed) {
   SSATrajectory traj;
   traj.t.push_back(t0);

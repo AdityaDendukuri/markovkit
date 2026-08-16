@@ -20,7 +20,7 @@ std::vector<TalbotNode> talbot_nodes(num::idx N, num::real t);
 
 /// @brief Reconstruct subnetwork state vector e^{Rt} v via Talbot contour
 /// resolvent solves.
-num::Vector fourier_subnetwork_solve(const num::Matrix &R, const num::Vector &v,
-                                     num::real t, num::idx N = 32);
+num::Vector
+fourier_subnetwork_solve(const num::Matrix& R, const num::Vector& v, num::real t, num::idx N = 32);
 
 } // namespace markovkit::else_solver

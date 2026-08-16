@@ -39,24 +39,39 @@ struct MultiIndex {
       data_[i++] = v;
   }
 
-  explicit MultiIndex(std::size_t n, int val = 0) : n_(static_cast<int8_t>(n)) {
+  explicit MultiIndex(std::size_t n, int val = 0)
+      : n_(static_cast<int8_t>(n)) {
     assert(n <= kMaxDim);
     for (std::size_t i = 0; i < n; ++i)
       data_[i] = val;
   }
 
-  std::size_t size() const { return static_cast<std::size_t>(n_); }
+  std::size_t size() const {
+    return static_cast<std::size_t>(n_);
+  }
 
-  int &operator[](std::size_t i) { return data_[i]; }
-  int operator[](std::size_t i) const { return data_[i]; }
+  int& operator[](std::size_t i) {
+    return data_[i];
+  }
+  int operator[](std::size_t i) const {
+    return data_[i];
+  }
 
   // Range iteration (supports range-for and std algorithms)
-  int *begin() { return data_; }
-  int *end() { return data_ + n_; }
-  const int *begin() const { return data_; }
-  const int *end() const { return data_ + n_; }
+  int* begin() {
+    return data_;
+  }
+  int* end() {
+    return data_ + n_;
+  }
+  const int* begin() const {
+    return data_;
+  }
+  const int* end() const {
+    return data_ + n_;
+  }
 
-  bool operator==(const MultiIndex &o) const {
+  bool operator==(const MultiIndex& o) const {
     if (n_ != o.n_)
       return false;
     for (int8_t i = 0; i < n_; ++i)
@@ -64,10 +79,12 @@ struct MultiIndex {
         return false;
     return true;
   }
-  bool operator!=(const MultiIndex &o) const { return !(*this == o); }
+  bool operator!=(const MultiIndex& o) const {
+    return !(*this == o);
+  }
 
   /// @brief Element-wise addition (stoichiometry application)
-  MultiIndex operator+(const MultiIndex &o) const {
+  MultiIndex operator+(const MultiIndex& o) const {
     MultiIndex r(size());
     for (int8_t i = 0; i < n_; ++i)
       r.data_[i] = data_[i] + o.data_[i];
@@ -80,11 +97,10 @@ struct MultiIndex {
 // --- std::hash specialization for MultiIndex --------------------------------
 namespace std {
 template <> struct hash<fsp::MultiIndex> {
-  std::size_t operator()(const fsp::MultiIndex &x) const noexcept {
+  std::size_t operator()(const fsp::MultiIndex& x) const noexcept {
     std::size_t seed = x.size();
     for (int8_t i = 0; i < x.n_; ++i) {
-      seed ^= static_cast<std::size_t>(x.data_[i]) + 0x9e3779b9u + (seed << 6) +
-              (seed >> 2);
+      seed ^= static_cast<std::size_t>(x.data_[i]) + 0x9e3779b9u + (seed << 6) + (seed >> 2);
     }
     return seed;
   }

@@ -13,10 +13,10 @@
 namespace fsp {
 
 std::tuple<FSPSolution, AdaptiveFSPDiagnostics>
-solve_adaptive_fsp(const FSPProblem &prob, const AdaptiveFSPParams &params) {
-  const ReactionSystem &model = prob.model;
-  const std::vector<double> &rates = prob.rates;
-  const BoundaryCondition &bc = prob.bc;
+solve_adaptive_fsp(const FSPProblem& prob, const AdaptiveFSPParams& params) {
+  const ReactionSystem& model = prob.model;
+  const std::vector<double>& rates = prob.rates;
+  const BoundaryCondition& bc = prob.bc;
   double t0 = prob.t0;
   double tf = prob.tf;
   int n_species = (int)prob.u0.size();
@@ -81,15 +81,13 @@ solve_adaptive_fsp(const FSPProblem &prob, const AdaptiveFSPParams &params) {
       p_in[(num::idx)i] = sp.probs[i];
 
     num::operators::SparseOp Aop(*A_cached);
-    num::Vector p_out =
-        num::expv(dt, Aop, p_in, params.krylov_m, params.krylov_tol);
+    num::Vector p_out = num::expv(dt, Aop, p_in, params.krylov_m, params.krylov_tol);
 
     sp.probs.resize(n);
     for (int i = 0; i < n; ++i)
       sp.probs[i] = std::max(0.0, p_out[(num::idx)i]);
 
-    sp.compress(model, rates, t, params.prob_quantile, params.flux_tolerance,
-                &exit_cached);
+    sp.compress(model, rates, t, params.prob_quantile, params.flux_tolerance, &exit_cached);
     if (params.abs_threshold > 0.0) {
       int n_before = sp.size();
       std::vector<bool> kill(n_before, false);
@@ -103,7 +101,7 @@ solve_adaptive_fsp(const FSPProblem &prob, const AdaptiveFSPParams &params) {
     for (double p : sp.probs)
       sum_p += p;
     if (sum_p > 0.0) {
-      for (double &p : sp.probs)
+      for (double& p : sp.probs)
         p /= sum_p;
     }
 

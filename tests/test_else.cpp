@@ -59,18 +59,18 @@ void test_fess_network() {
 
   ReactionSystem sys;
   sys.stoich_vecs = {MultiIndex{1}, MultiIndex{-1}};
-  sys.propensities = {[](const MultiIndex &x, const std::vector<double> &rates,
-                         double t) { return rates[0]; },
-                      [](const MultiIndex &x, const std::vector<double> &rates,
-                         double t) { return rates[1] * x[0]; }};
+  sys.propensities = {
+      [](const MultiIndex& x, const std::vector<double>& rates, double t) { return rates[0]; },
+      [](const MultiIndex& x, const std::vector<double>& rates, double t) {
+        return rates[1] * x[0];
+      }};
   std::vector<double> rates = {5.0, 0.1};
 
   FESSNetwork net(MultiIndex{0});
   net.augment({MultiIndex{0}}, sys, rates, 3);
 
   assert(net.size() >= 3);
-  std::cout << "[PASS] FESSNetwork dynamic state space expansion ("
-            << net.size() << " states)\n";
+  std::cout << "[PASS] FESSNetwork dynamic state space expansion (" << net.size() << " states)\n";
 }
 
 void test_fess_density_evolution() {
@@ -79,10 +79,11 @@ void test_fess_density_evolution() {
 
   ReactionSystem sys;
   sys.stoich_vecs = {MultiIndex{1}, MultiIndex{-1}};
-  sys.propensities = {[](const MultiIndex &x, const std::vector<double> &rates,
-                         double t) { return rates[0]; },
-                      [](const MultiIndex &x, const std::vector<double> &rates,
-                         double t) { return rates[1] * x[0]; }};
+  sys.propensities = {
+      [](const MultiIndex& x, const std::vector<double>& rates, double t) { return rates[0]; },
+      [](const MultiIndex& x, const std::vector<double>& rates, double t) {
+        return rates[1] * x[0];
+      }};
   std::vector<double> rates = {5.0, 0.1};
 
   fsp::FlatHashMap<MultiIndex, double> p0;
@@ -113,8 +114,7 @@ void test_talbot_fourier_resolvent() {
   assert(std::abs(p_fourier[0] - p_expv[0]) < 1e-4);
   assert(std::abs(p_fourier[1] - p_expv[1]) < 1e-4);
 
-  std::cout
-      << "[PASS] ELSE Talbot Fourier contour resolvent solve matches expv!\n";
+  std::cout << "[PASS] ELSE Talbot Fourier contour resolvent solve matches expv!\n";
 }
 
 void test_ensemble_else() {

@@ -4,7 +4,7 @@
 
 namespace markovkit::else_solver {
 
-ExponentialFitResult fit_exponential(const std::vector<double> &times) {
+ExponentialFitResult fit_exponential(const std::vector<double>& times) {
   if (times.empty())
     throw std::invalid_argument("fit_exponential: empty time vector");
 

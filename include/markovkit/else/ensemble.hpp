@@ -24,7 +24,8 @@ struct EnsembleResult {
 /// @brief Run Ensemble ELSE over N parallel trajectories sharing a subnetwork
 /// generator solve.
 EnsembleResult ensemble_else_simulate(std::size_t n_trajectories,
-                                      const Subnetwork &subnetwork,
-                                      double t_max, int rng_seed = 42);
+                                      const Subnetwork& subnetwork,
+                                      double t_max,
+                                      int rng_seed = 42);
 
 } // namespace markovkit::else_solver

@@ -9,8 +9,7 @@
 namespace fsp {
 
 /// @brief Propensity function signature: a_k(x, rates, t) -> double
-using PropensityFn = std::function<double(const MultiIndex &,
-                                          const std::vector<double> &, double)>;
+using PropensityFn = std::function<double(const MultiIndex&, const std::vector<double>&, double)>;
 
 /// @brief Discrete stochastic reaction network.
 ///
@@ -23,7 +22,9 @@ struct ReactionSystem {
   std::vector<MultiIndex> stoich_vecs;    ///< net stoichiometry per reaction
   std::vector<PropensityFn> propensities; ///< propensity functions
 
-  std::size_t n_reactions() const { return stoich_vecs.size(); }
+  std::size_t n_reactions() const {
+    return stoich_vecs.size();
+  }
 };
 
 } // namespace fsp

@@ -6,7 +6,8 @@
 
 namespace markovkit::else_solver {
 
-Subnetwork::Subnetwork(num::Matrix generator) : R(std::move(generator)) {
+Subnetwork::Subnetwork(num::Matrix generator)
+    : R(std::move(generator)) {
   num::idx n = R.rows();
   if (R.cols() != n)
     throw std::invalid_argument("Subnetwork: generator must be square");
@@ -24,7 +25,7 @@ Subnetwork::Subnetwork(num::Matrix generator) : R(std::move(generator)) {
   Z = num::lu_inv(lu_fact);
 }
 
-num::Vector Subnetwork::occupation(const num::Vector &entrance) const {
+num::Vector Subnetwork::occupation(const num::Vector& entrance) const {
   num::Vector u(Z.rows(), 0.0);
   num::operators::DenseOp Zop(Z);
   Zop.apply(entrance,
@@ -32,8 +33,7 @@ num::Vector Subnetwork::occupation(const num::Vector &entrance) const {
   return u;
 }
 
-std::vector<double>
-Subnetwork::cut_time_losses(const num::Vector &entrance) const {
+std::vector<double> Subnetwork::cut_time_losses(const num::Vector& entrance) const {
   num::idx n = Z.rows();
   num::Vector u = occupation(entrance);
 
@@ -49,8 +49,7 @@ Subnetwork::cut_time_losses(const num::Vector &entrance) const {
   return losses;
 }
 
-std::vector<double>
-Subnetwork::schur_losses(const num::Vector &entrance) const {
+std::vector<double> Subnetwork::schur_losses(const num::Vector& entrance) const {
   num::idx n = Z.rows();
   num::Vector u = occupation(entrance);
 
@@ -62,8 +61,7 @@ Subnetwork::schur_losses(const num::Vector &entrance) const {
   return losses;
 }
 
-std::vector<double>
-Subnetwork::cut_norm_losses(const num::Vector &entrance) const {
+std::vector<double> Subnetwork::cut_norm_losses(const num::Vector& entrance) const {
   num::idx n = Z.rows();
   num::Vector u = occupation(entrance);
 

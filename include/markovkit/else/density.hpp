@@ -29,9 +29,11 @@ struct FESSDensityEvolution {
 
 /// @brief Compute density evolution P(x, t) across steps over subnetwork
 /// generator solves.
-FESSDensityEvolution fess_density_evolution(
-    const fsp::FlatHashMap<fsp::MultiIndex, double> &initial_density,
-    const fsp::ReactionSystem &model, const std::vector<double> &rates,
-    int steps = 10, FESSOptions options = {});
+FESSDensityEvolution
+fess_density_evolution(const fsp::FlatHashMap<fsp::MultiIndex, double>& initial_density,
+                       const fsp::ReactionSystem& model,
+                       const std::vector<double>& rates,
+                       int steps = 10,
+                       FESSOptions options = {});
 
 } // namespace markovkit::else_solver

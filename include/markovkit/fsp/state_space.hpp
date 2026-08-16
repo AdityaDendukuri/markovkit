@@ -26,21 +26,26 @@ struct StateSpace {
   std::vector<MultiIndex> id_to_state;
   int next_id = 0;
 
-  int size() const { return (int)states.size(); }
-  bool dirty =
-      true; ///< true whenever the state set changed since last build_generator
+  int size() const {
+    return (int)states.size();
+  }
+  bool dirty = true; ///< true whenever the state set changed since last build_generator
 
-  void add_state(const MultiIndex &x, double prob = 0.0);
-  void remove_states(const std::vector<bool> &remove_mask);
-  void expand(const ReactionSystem &model, const BoundaryCondition &bc,
-              int depth = 1);
-  void expand_ssa(const ReactionSystem &model, const std::vector<double> &rates,
-                  double t, const BoundaryCondition &bc, int depth,
-                  std::mt19937 &rng);
-  std::pair<double, int>
-  compress(const ReactionSystem &model, const std::vector<double> &rates,
-           double t, double prob_quantile, double flux_tolerance = 1e-6,
-           const std::vector<double> *precomputed_exit_rates = nullptr);
+  void add_state(const MultiIndex& x, double prob = 0.0);
+  void remove_states(const std::vector<bool>& remove_mask);
+  void expand(const ReactionSystem& model, const BoundaryCondition& bc, int depth = 1);
+  void expand_ssa(const ReactionSystem& model,
+                  const std::vector<double>& rates,
+                  double t,
+                  const BoundaryCondition& bc,
+                  int depth,
+                  std::mt19937& rng);
+  std::pair<double, int> compress(const ReactionSystem& model,
+                                  const std::vector<double>& rates,
+                                  double t,
+                                  double prob_quantile,
+                                  double flux_tolerance = 1e-6,
+                                  const std::vector<double>* precomputed_exit_rates = nullptr);
   double renormalize();
   std::vector<int> get_global_ids() const;
 };

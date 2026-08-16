@@ -28,12 +28,10 @@ std::vector<TalbotNode> talbot_nodes(num::idx N, num::real t) {
     num::real cotb = cos_b / sin_b;
     num::real csc2b = 1.0 / (sin_b * sin_b);
 
-    num::cplx zeta = static_cast<num::real>(N) *
-                     (a * theta * cotb - c + i_unit * (d * theta));
+    num::cplx zeta = static_cast<num::real>(N) * (a * theta * cotb - c + i_unit * (d * theta));
     num::cplx z = zeta / t;
 
-    num::cplx dzeta = static_cast<num::real>(N) *
-                      (a * (cotb - b * theta * csc2b) + i_unit * d);
+    num::cplx dzeta = static_cast<num::real>(N) * (a * (cotb - b * theta * csc2b) + i_unit * d);
     num::cplx dz = dzeta / t;
 
     num::cplx w = (dtheta / (2.0 * pi * i_unit)) * std::exp(z * t) * dz;
@@ -43,8 +41,8 @@ std::vector<TalbotNode> talbot_nodes(num::idx N, num::real t) {
   return nodes;
 }
 
-num::Vector fourier_subnetwork_solve(const num::Matrix &R, const num::Vector &v,
-                                     num::real t, num::idx N) {
+num::Vector
+fourier_subnetwork_solve(const num::Matrix& R, const num::Vector& v, num::real t, num::idx N) {
   num::idx n = R.rows();
   num::Vector result(n, 0.0);
 
@@ -57,7 +55,7 @@ num::Vector fourier_subnetwork_solve(const num::Matrix &R, const num::Vector &v,
   auto batch_solutions = num::resolvent_solve_batch(shifts, R, v);
 
   for (std::size_t k = 0; k < nodes.size(); ++k) {
-    const auto &sol = batch_solutions[k];
+    const auto& sol = batch_solutions[k];
     num::cplx w = nodes[k].w;
     for (num::idx i = 0; i < n; ++i) {
       num::cplx contrib = w * sol[i];

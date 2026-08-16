@@ -4,9 +4,10 @@
 
 namespace fsp {
 
-GeneratorResult build_generator(const StateSpace &sp,
-                                const ReactionSystem &model,
-                                const std::vector<double> &rates, double t,
+GeneratorResult build_generator(const StateSpace& sp,
+                                const ReactionSystem& model,
+                                const std::vector<double>& rates,
+                                double t,
                                 bool absorbing) {
   int n = sp.size();
   std::vector<num::idx> rows, cols;
@@ -16,7 +17,7 @@ GeneratorResult build_generator(const StateSpace &sp,
   std::vector<double> diag(n, 0.0);
 
   for (int i = 0; i < n; ++i) {
-    const auto &s = sp.states[i];
+    const auto& s = sp.states[i];
     double total_exit = 0.0;
 
     for (std::size_t r = 0; r < model.propensities.size(); ++r) {
@@ -47,8 +48,8 @@ GeneratorResult build_generator(const StateSpace &sp,
     vals.push_back(diag_val);
   }
 
-  num::SparseMatrix A = num::SparseMatrix::from_triplets(
-      (num::idx)n, (num::idx)n, rows, cols, vals);
+  num::SparseMatrix A =
+      num::SparseMatrix::from_triplets((num::idx)n, (num::idx)n, rows, cols, vals);
   return {std::move(A), std::move(exit_rate_boundary), std::move(diag)};
 }
 

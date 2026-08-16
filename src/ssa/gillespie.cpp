@@ -4,10 +4,12 @@
 
 namespace markovkit::ssa {
 
-SSATrajectory gillespie_direct_simulate(const fsp::ReactionSystem &model,
-                                        const std::vector<num::real> &rates,
-                                        const fsp::MultiIndex &u0, num::real t0,
-                                        num::real tf, int rng_seed) {
+SSATrajectory gillespie_direct_simulate(const fsp::ReactionSystem& model,
+                                        const std::vector<num::real>& rates,
+                                        const fsp::MultiIndex& u0,
+                                        num::real t0,
+                                        num::real tf,
+                                        int rng_seed) {
   SSATrajectory traj;
   traj.t.push_back(t0);
   traj.x.push_back(u0);

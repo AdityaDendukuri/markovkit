@@ -10,10 +10,11 @@ void test_reaction_system() {
   // mRNA -> 0        (rate gamma)
   ReactionSystem sys;
   sys.stoich_vecs = {MultiIndex{1}, MultiIndex{-1}};
-  sys.propensities = {[](const MultiIndex &x, const std::vector<double> &rates,
-                         double t) { return rates[0]; },
-                      [](const MultiIndex &x, const std::vector<double> &rates,
-                         double t) { return rates[1] * x[0]; }};
+  sys.propensities = {
+      [](const MultiIndex& x, const std::vector<double>& rates, double t) { return rates[0]; },
+      [](const MultiIndex& x, const std::vector<double>& rates, double t) {
+        return rates[1] * x[0];
+      }};
 
   assert(sys.n_reactions() == 2);
   std::cout << "[PASS] FSP ReactionSystem initialization\n";
@@ -24,10 +25,11 @@ void test_state_space() {
 
   ReactionSystem sys;
   sys.stoich_vecs = {MultiIndex{1}, MultiIndex{-1}};
-  sys.propensities = {[](const MultiIndex &x, const std::vector<double> &rates,
-                         double t) { return rates[0]; },
-                      [](const MultiIndex &x, const std::vector<double> &rates,
-                         double t) { return rates[1] * x[0]; }};
+  sys.propensities = {
+      [](const MultiIndex& x, const std::vector<double>& rates, double t) { return rates[0]; },
+      [](const MultiIndex& x, const std::vector<double>& rates, double t) {
+        return rates[1] * x[0];
+      }};
 
   StateSpace states;
   states.add_state(MultiIndex{0}, 1.0);
@@ -37,8 +39,7 @@ void test_state_space() {
   // Expand state space
   states.expand(sys, bc, 2);
   assert(states.size() >= 2);
-  std::cout << "[PASS] FSP StateSpace expansion (" << states.size()
-            << " states)\n";
+  std::cout << "[PASS] FSP StateSpace expansion (" << states.size() << " states)\n";
 }
 
 int main() {

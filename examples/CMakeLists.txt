@@ -1,11 +1,14 @@
-add_executable(gene_expression gene_expression.cpp)
-target_link_libraries(gene_expression PRIVATE markovkit::markovkit)
+# examples/CMakeLists.txt
+# Auto-discovers all *.cpp example files and creates executable targets linked to markovkit::markovkit.
+# Also creates a custom meta-target 'markovkit_examples' to build all examples at once.
 
-add_executable(plot_gene_expression plot_gene_expression.cpp)
-target_link_libraries(plot_gene_expression PRIVATE markovkit::markovkit)
+file(GLOB EXAMPLE_SOURCES CONFIGURE_DEPENDS "*.cpp")
 
-add_executable(oregonator_example oregonator_example.cpp)
-target_link_libraries(oregonator_example PRIVATE markovkit::markovkit)
+add_custom_target(markovkit_examples ALL)
 
-add_executable(toggle_switch_example toggle_switch_example.cpp)
-target_link_libraries(toggle_switch_example PRIVATE markovkit::markovkit)
+foreach(SRC ${EXAMPLE_SOURCES})
+    get_filename_component(TARGET_NAME ${SRC} NAME_WE)
+    add_executable(${TARGET_NAME} ${SRC})
+    target_link_libraries(${TARGET_NAME} PRIVATE markovkit::markovkit)
+    add_dependencies(markovkit_examples ${TARGET_NAME})
+endforeach()

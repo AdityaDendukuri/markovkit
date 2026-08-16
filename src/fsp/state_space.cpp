@@ -4,7 +4,7 @@
 
 namespace fsp {
 
-void StateSpace::add_state(const MultiIndex &x, double prob) {
+void StateSpace::add_state(const MultiIndex& x, double prob) {
   auto it = index.find(x);
   if (it != index.end()) {
     probs[it->second] += prob;
@@ -23,7 +23,7 @@ void StateSpace::add_state(const MultiIndex &x, double prob) {
   dirty = true;
 }
 
-void StateSpace::remove_states(const std::vector<bool> &remove_mask) {
+void StateSpace::remove_states(const std::vector<bool>& remove_mask) {
   int n = (int)states.size();
   std::vector<MultiIndex> new_states;
   std::vector<double> new_probs;
@@ -44,12 +44,11 @@ void StateSpace::remove_states(const std::vector<bool> &remove_mask) {
   dirty = true;
 }
 
-void StateSpace::expand(const ReactionSystem &model,
-                        const BoundaryCondition &bc, int depth) {
+void StateSpace::expand(const ReactionSystem& model, const BoundaryCondition& bc, int depth) {
   for (int d = 0; d < depth; ++d) {
     std::vector<MultiIndex> current_states = states;
-    for (const auto &s : current_states) {
-      for (const auto &v : model.stoich_vecs) {
+    for (const auto& s : current_states) {
+      for (const auto& v : model.stoich_vecs) {
         MultiIndex nxt = s;
         for (std::size_t i = 0; i < s.size(); ++i)
           nxt[i] += v[i];
@@ -61,18 +60,21 @@ void StateSpace::expand(const ReactionSystem &model,
   }
 }
 
-void StateSpace::expand_ssa(const ReactionSystem &model,
-                            const std::vector<double> &rates, double t,
-                            const BoundaryCondition &bc, int depth,
-                            std::mt19937 &rng) {
+void StateSpace::expand_ssa(const ReactionSystem& model,
+                            const std::vector<double>& rates,
+                            double t,
+                            const BoundaryCondition& bc,
+                            int depth,
+                            std::mt19937& rng) {
   expand(model, bc, depth);
 }
 
-std::pair<double, int>
-StateSpace::compress(const ReactionSystem &model,
-                     const std::vector<double> &rates, double t,
-                     double prob_quantile, double flux_tolerance,
-                     const std::vector<double> *precomputed_exit_rates) {
+std::pair<double, int> StateSpace::compress(const ReactionSystem& model,
+                                            const std::vector<double>& rates,
+                                            double t,
+                                            double prob_quantile,
+                                            double flux_tolerance,
+                                            const std::vector<double>* precomputed_exit_rates) {
   return {0.0, 0};
 }
 
@@ -81,7 +83,7 @@ double StateSpace::renormalize() {
   for (double p : probs)
     s += p;
   if (s > 0.0) {
-    for (double &p : probs)
+    for (double& p : probs)
       p /= s;
   }
   return s;

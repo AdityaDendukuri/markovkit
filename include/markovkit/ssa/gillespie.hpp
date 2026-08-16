@@ -19,9 +19,11 @@ struct SSATrajectory {
 };
 
 /// @brief Simulate a single trajectory using Gillespie Direct Method SSA.
-SSATrajectory gillespie_direct_simulate(const fsp::ReactionSystem &model,
-                                        const std::vector<num::real> &rates,
-                                        const fsp::MultiIndex &u0, num::real t0,
-                                        num::real tf, int rng_seed = 42);
+SSATrajectory gillespie_direct_simulate(const fsp::ReactionSystem& model,
+                                        const std::vector<num::real>& rates,
+                                        const fsp::MultiIndex& u0,
+                                        num::real t0,
+                                        num::real tf,
+                                        int rng_seed = 42);
 
 } // namespace markovkit::ssa

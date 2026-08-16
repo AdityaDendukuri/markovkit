@@ -17,6 +17,6 @@ struct ExponentialFitResult {
 
 /// @brief Fit an exponential distribution P(T <= t) = 1 - exp(-lambda * t) to
 /// empirical times.
-ExponentialFitResult fit_exponential(const std::vector<double> &times);
+ExponentialFitResult fit_exponential(const std::vector<double>& times);
 
 } // namespace markovkit::else_solver

@@ -21,7 +21,9 @@ struct FSPSolution {
   std::vector<int> state_space_sizes; ///< |S| at each snapshot
   int n_species;                      ///< number of species
 
-  int n_snapshots() const { return (int)t.size(); }
+  int n_snapshots() const {
+    return (int)t.size();
+  }
 
   /// @brief Compute mean state at each snapshot.
   ///

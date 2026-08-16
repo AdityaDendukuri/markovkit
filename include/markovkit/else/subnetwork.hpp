@@ -20,16 +20,16 @@ struct Subnetwork {
   explicit Subnetwork(num::Matrix generator);
 
   /// @brief Compute occupation vector u = Z * entrance
-  num::Vector occupation(const num::Vector &entrance) const;
+  num::Vector occupation(const num::Vector& entrance) const;
 
   /// @brief Compute exact time loss vector L_k for each candidate state k
-  std::vector<double> cut_time_losses(const num::Vector &entrance) const;
+  std::vector<double> cut_time_losses(const num::Vector& entrance) const;
 
   /// @brief Compute Schur loss vector S_k = u_k / Z(k,k)
-  std::vector<double> schur_losses(const num::Vector &entrance) const;
+  std::vector<double> schur_losses(const num::Vector& entrance) const;
 
   /// @brief Compute symmetrized cut_norm loss vector
-  std::vector<double> cut_norm_losses(const num::Vector &entrance) const;
+  std::vector<double> cut_norm_losses(const num::Vector& entrance) const;
 
   /// @brief O(N^2) Schur rank-1 state shedding update: Z_new = Z - Z_{:,k}
   /// Z_{k,:} / Z_{k,k}

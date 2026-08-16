@@ -10,11 +10,11 @@
 
 namespace fsp {
 
-std::tuple<FSPSolution, KrylovFSPDiagnostics>
-solve_krylov_fsp(const FSPProblem &prob, const KrylovFSPParams &params) {
-  const ReactionSystem &model = prob.model;
-  const std::vector<double> &rates = prob.rates;
-  const BoundaryCondition &bc = prob.bc;
+std::tuple<FSPSolution, KrylovFSPDiagnostics> solve_krylov_fsp(const FSPProblem& prob,
+                                                               const KrylovFSPParams& params) {
+  const ReactionSystem& model = prob.model;
+  const std::vector<double>& rates = prob.rates;
+  const BoundaryCondition& bc = prob.bc;
   double t0 = prob.t0;
   double tf = prob.tf;
   int n_species = (int)prob.u0.size();
@@ -42,8 +42,7 @@ solve_krylov_fsp(const FSPProblem &prob, const KrylovFSPParams &params) {
   while (t < tf && iter < params.max_iter) {
     ++iter;
 
-    auto [A, exit_rate_boundary, gen_diag] =
-        build_generator(sp, model, rates, t, true);
+    auto [A, exit_rate_boundary, gen_diag] = build_generator(sp, model, rates, t, true);
     int n = sp.size();
 
     bool iexpand = false;
@@ -61,8 +60,7 @@ solve_krylov_fsp(const FSPProblem &prob, const KrylovFSPParams &params) {
         p_in[(num::idx)i] = sp.probs[i];
 
       num::operators::SparseOp Aop(A);
-      p_new =
-          num::expv(tau_step, Aop, p_in, params.krylov_m, params.krylov_tol);
+      p_new = num::expv(tau_step, Aop, p_in, params.krylov_m, params.krylov_tol);
 
       bool has_bad = false;
       for (int i = 0; i < n; ++i) {
@@ -133,7 +131,7 @@ solve_krylov_fsp(const FSPProblem &prob, const KrylovFSPParams &params) {
     for (double p : sp.probs)
       sum_p += p;
     if (sum_p > 0.0) {
-      for (double &p : sp.probs)
+      for (double& p : sp.probs)
         p /= sum_p;
     }
 

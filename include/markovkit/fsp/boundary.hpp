@@ -9,13 +9,13 @@
 namespace fsp {
 
 /// @brief Boundary condition: returns true if state x is inside the domain.
-using BoundaryCondition = std::function<bool(const MultiIndex &)>;
+using BoundaryCondition = std::function<bool(const MultiIndex&)>;
 
 /// @brief Rectangular boundary: each component of x must lie in [0, bound].
 ///
 /// Equivalent to RectLatticeBoundaryCondition(x, bound) in Julia.
 inline BoundaryCondition rect_boundary(int bound) {
-  return [bound](const MultiIndex &x) -> bool {
+  return [bound](const MultiIndex& x) -> bool {
     for (int c : x) {
       if (c < 0 || c > bound)
         return false;
@@ -27,8 +27,8 @@ inline BoundaryCondition rect_boundary(int bound) {
 /// @brief Rectangular boundary with per-species upper limits.
 ///
 /// bounds[i] = max allowed value for species i.
-inline BoundaryCondition rect_boundary(const std::vector<int> &bounds) {
-  return [bounds](const MultiIndex &x) -> bool {
+inline BoundaryCondition rect_boundary(const std::vector<int>& bounds) {
+  return [bounds](const MultiIndex& x) -> bool {
     if (x.size() != bounds.size())
       return false;
     for (std::size_t i = 0; i < x.size(); ++i) {
