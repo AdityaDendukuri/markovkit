@@ -87,41 +87,44 @@ int main() {
   std::vector<double> basin_U_high_U{76.0}, basin_U_high_V{5.0};
   std::vector<double> basin_V_high_U{5.0}, basin_V_high_V{83.0};
 
-  // 4. Generate 2-Panel Side-by-Side Figure reproducing notebook:
-  // Panel 1: Direct SSA (Trapped in initial U-basin)
-  // Panel 2: Shared Expected-Visits ELSE (Crosses rare saddle & visits low-prob V-high basin)
-  num::plt::subplot(1, 2);
+  auto build_figure = [&]() {
+    num::plt::subplot(1, 2);
 
-  // Panel (a): Direct SSA
-  num::plt::plot(ssa_U, ssa_V, "SSA Path", "lines lw 1");
-  num::plt::plot(start_U, start_V, "Start (17,1)", "points pt 7 ps 1.2");
-  num::plt::plot(basin_U_high_U, basin_U_high_V, "U-high (76,5)", "points pt 9 ps 1.2");
-  num::plt::plot(basin_V_high_U, basin_V_high_V, "V-high (5,83)", "points pt 13 ps 1.2");
-  num::plt::title("(a) Direct SSA: Trapped in Initial Basin");
-  num::plt::xlabel("U Molecule Count");
-  num::plt::ylabel("V Molecule Count");
-  num::plt::xlim(0, 105);
-  num::plt::ylim(0, 105);
-  num::plt::legend();
-  num::plt::next();
+    // Panel (a): Direct SSA
+    num::plt::plot(ssa_U, ssa_V, "SSA Path", "lines lw 1");
+    num::plt::plot(start_U, start_V, "Start (17,1)", "points pt 7 ps 1.2");
+    num::plt::plot(basin_U_high_U, basin_U_high_V, "U-high (76,5)", "points pt 9 ps 1.2");
+    num::plt::plot(basin_V_high_U, basin_V_high_V, "V-high (5,83)", "points pt 13 ps 1.2");
+    num::plt::title("(a) Direct SSA: Trapped in Initial Basin");
+    num::plt::xlabel("U Molecule Count");
+    num::plt::ylabel("V Molecule Count");
+    num::plt::xlim(0, 105);
+    num::plt::ylim(0, 105);
+    num::plt::legend();
+    num::plt::next();
 
-  // Panel (b): Shared Expected-Visits ELSE
-  num::plt::plot(else_U, else_V, "ELSE Path", "lines lw 1");
-  num::plt::plot(start_U, start_V, "Start (17,1)", "points pt 7 ps 1.2");
-  num::plt::plot(basin_U_high_U, basin_U_high_V, "U-high (76,5)", "points pt 9 ps 1.2");
-  num::plt::plot(basin_V_high_U, basin_V_high_V, "V-high (5,83)", "points pt 13 ps 1.2");
-  num::plt::title("(b) Expected-Visits ELSE: Visits Low-Prob Basin");
-  num::plt::xlabel("U Molecule Count");
-  num::plt::ylabel("V Molecule Count");
-  num::plt::xlim(0, 105);
-  num::plt::ylim(0, 105);
-  num::plt::legend();
+    // Panel (b): Shared Expected-Visits ELSE
+    num::plt::plot(else_U, else_V, "ELSE Path", "lines lw 1");
+    num::plt::plot(start_U, start_V, "Start (17,1)", "points pt 7 ps 1.2");
+    num::plt::plot(basin_U_high_U, basin_U_high_V, "U-high (76,5)", "points pt 9 ps 1.2");
+    num::plt::plot(basin_V_high_U, basin_V_high_V, "V-high (5,83)", "points pt 13 ps 1.2");
+    num::plt::title("(b) Expected-Visits ELSE: Visits Low-Prob Basin");
+    num::plt::xlabel("U Molecule Count");
+    num::plt::ylabel("V Molecule Count");
+    num::plt::xlim(0, 105);
+    num::plt::ylim(0, 105);
+    num::plt::legend();
+  };
 
-  std::cout << "\nRendering 2D State Space Trajectory Comparison in ASCII (140x35)...\n\n";
-  num::plt::show_dumb(140, 35);
-
-  std::cout << "Saving high-res plot to 'toggle_switch_results.png'...\n";
+  // Save real high-resolution PNG figure
+  std::cout << "Saving high-resolution figure to 'toggle_switch_results.png'...\n";
+  build_figure();
   num::plt::savefig("toggle_switch_results.png");
+
+  // Render ASCII terminal view
+  std::cout << "\nRendering 2D State Space Trajectory Comparison in ASCII (140x35)...\n\n";
+  build_figure();
+  num::plt::show_dumb(140, 35);
 
   std::cout << "\nTian-Burrage Toggle Switch Rare-Event Trajectory Reproduction Completed Successfully!\n";
   return 0;
