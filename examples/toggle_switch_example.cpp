@@ -1,3 +1,6 @@
+/// @file toggle_switch_example.cpp
+/// @brief Reproduction of the Tian-Burrage Genetic Toggle Switch Rare-Event Trajectory Figure:
+/// Direct SSA (Trapped in initial basin) vs Multiple ELSE (Visiting low-probability V-high basin).
 #include <cmath>
 #include <iostream>
 #include <markovkit.hpp>
@@ -5,33 +8,35 @@
 #include <vector>
 
 int main() {
-  std::cout << "=== MarkovKit: Genetic Toggle Switch FSP & Ensemble ELSE "
-               "Simulation ===\n\n";
+  std::cout << "=== MarkovKit: Tian-Burrage Genetic Toggle Switch Trajectory Comparison ===\n";
+  std::cout << "Comparing Direct SSA vs Multiple ELSE in 2D State Space (U, V)...\n\n";
 
   using namespace fsp;
   using namespace markovkit::else_solver;
+  using namespace markovkit::ssa;
 
   // 1. Define Tian-Burrage Genetic Toggle Switch Reaction System:
+  // Reactions:
+  //   1) 0 -> U  (propensity: eta * (alpha1 + beta1 * K1^3 / (K1^3 + V^3)))
+  //   2) U -> 0  (propensity: (d1 + dU) * U)
+  //   3) 0 -> V  (propensity: eta * (alpha2 + beta2 * K2^3 / (K2^3 + U^3)))
+  //   4) V -> 0  (propensity: d2 * V)
   ReactionSystem sys;
-  sys.stoich_vecs = {MultiIndex{1, 0}, MultiIndex{-1, 0}, MultiIndex{0, 1},
-                     MultiIndex{0, -1}};
+  sys.stoich_vecs = {MultiIndex{1, 0}, MultiIndex{-1, 0}, MultiIndex{0, 1}, MultiIndex{0, -1}};
 
-  double eta = 1.0;
-  double alpha1 = 20.0, beta1 = 400.0, K1 = 100.0, d1 = 1.0;
-  double s = 0.1, gamma = 1.0;
-  double alpha2 = 20.0, beta2 = 400.0, K2 = 100.0, d2 = 1.0;
-
-  double scale = 0.05; // System scale
-  std::vector<double> rates = {eta,
-                               alpha1 * scale,
-                               beta1 * scale,
-                               K1 * scale,
-                               d1,
-                               s * gamma / (1.0 + s),
-                               alpha2 * scale,
-                               beta2 * scale,
-                               K2 * scale,
-                               d2};
+  double scale_factor = 0.2;
+  std::vector<double> rates = {
+      1.0,                    // eta
+      20.0 * scale_factor,    // alpha1 = 4.0
+      400.0 * scale_factor,   // beta1  = 80.0
+      100.0 * scale_factor,   // K1     = 20.0
+      1.0,                    // d1
+      0.1 / 1.1,              // dU
+      20.0 * scale_factor,    // alpha2 = 4.0
+      400.0 * scale_factor,   // beta2  = 80.0
+      100.0 * scale_factor,   // K2     = 20.0
+      1.0                     // d2
+  };
 
   sys.propensities = {
       [](const MultiIndex &x, const std::vector<double> &r, double t) {
@@ -51,98 +56,73 @@ int main() {
         return r[9] * static_cast<double>(x[1]);
       }};
 
-  // 2. Set Up Adaptive FSP Simulation
-  FSPProblem prob;
-  prob.model = sys;
-  prob.rates = rates;
-  prob.u0 = MultiIndex{20, 2}; // Initial state: U high, V low
-  prob.t0 = 0.0;
-  prob.tf = 30.0;
-  prob.bc = rect_boundary({80, 80});
+  MultiIndex initial_state{17, 1};
+  double tf = 500.0;
 
-  AdaptiveFSPParams params;
-  params.eps_dt = 0.2;
-  params.expansion_depth = 2;
-  params.krylov_m = 30;
-  params.krylov_tol = 1e-8;
-  params.max_iter = 500;
+  // 2. Direct SSA Simulation
+  std::cout << "1. Simulating Direct SSA (Gillespie) trajectory to tf=" << tf << "...\n";
+  SSATrajectory ssa_traj = gillespie_direct_simulate(sys, rates, initial_state, 0.0, tf, 66);
+  std::cout << "   Direct SSA completed in " << ssa_traj.t.size() << " steps.\n";
 
-  std::cout << "1. Solving Toggle Switch FSP from t=0 to t=" << prob.tf
-            << "...\n";
-  auto [sol, diag] = solve_adaptive_fsp(prob, params);
-  std::cout << "   Adaptive FSP completed in " << sol.t.size() << " steps.\n";
-
-  // 3. Extract time series
-  std::vector<double> time_points = sol.t;
-  std::vector<double> state_sizes;
-  for (int sz : sol.state_space_sizes)
-    state_sizes.push_back(static_cast<double>(sz));
-
-  std::vector<double> mean_U, mean_V;
-  for (const auto &snap : sol.snapshots) {
-    double mu = 0.0, mv = 0.0;
-    for (std::size_t i = 0; i < snap.states.size(); ++i) {
-      mu += snap.states[i][0] * snap.probs[i];
-      mv += snap.states[i][1] * snap.probs[i];
-    }
-    mean_U.push_back(mu);
-    mean_V.push_back(mv);
+  std::vector<double> ssa_U, ssa_V;
+  for (const auto &state : ssa_traj.x) {
+    ssa_U.push_back(static_cast<double>(state[0]));
+    ssa_V.push_back(static_cast<double>(state[1]));
   }
 
-  // 4. Run Ensemble ELSE simulation
-  std::cout
-      << "2. Running Ensemble ELSE simulation over bistable subnetwork...\n";
-  num::Matrix R_sub(2, 2, 0.0);
-  R_sub(0, 0) = -1.5;
-  R_sub(0, 1) = 0.5;
-  R_sub(1, 0) = 0.5;
-  R_sub(1, 1) = -1.5;
+  // 3. Multiple ELSE (Expected-Visits Low-Probability State Extrapolation) Simulation
+  std::cout << "2. Simulating Multiple ELSE trajectory across rare saddle region to tf=" << tf << "...\n";
+  ELSETrajectory else_traj = else_trajectory_simulate(sys, rates, initial_state, 0.0, tf, 3, 42);
+  std::cout << "   Multiple ELSE completed in " << else_traj.number_of_else_steps << " ELSE steps ("
+            << else_traj.t.size() << " trajectory points).\n";
 
-  Subnetwork sub(R_sub);
-  auto ens = ensemble_else_simulate(100, sub, 10.0, 42);
-  std::cout << "   Ensemble ELSE simulated " << ens.n_trajectories
-            << " parallel stochastic paths.\n";
+  std::vector<double> else_U, else_V;
+  for (const auto &state : else_traj.x) {
+    else_U.push_back(static_cast<double>(state[0]));
+    else_V.push_back(static_cast<double>(state[1]));
+  }
 
-  std::vector<double> traj_indices(ens.n_trajectories);
-  for (int i = 0; i < ens.n_trajectories; ++i)
-    traj_indices[i] = static_cast<double>(i + 1);
+  // Basin attractors for reference
+  std::vector<double> start_U{17.0}, start_V{1.0};
+  std::vector<double> basin_U_high_U{76.0}, basin_U_high_V{5.0};
+  std::vector<double> basin_V_high_U{5.0}, basin_V_high_V{83.0};
 
-  // 5. Generate 4-panel summary plot using num::plt (gnuplot wrapper)
-  num::plt::subplot(2, 2);
+  // 4. Generate 2-Panel Side-by-Side Figure reproducing notebook:
+  // Panel 1: Direct SSA (Trapped in initial U-basin)
+  // Panel 2: Shared Expected-Visits ELSE (Crosses rare saddle & visits low-prob V-high basin)
+  num::plt::subplot(1, 2);
 
-  // Panel (a): State space size |S|(t)
-  num::plt::plot(time_points, state_sizes, "|S|", "lines lw 2");
-  num::plt::title("(a) FSP Active State Space Size |S|");
-  num::plt::xlabel("Time");
-  num::plt::ylabel("|S|");
+  // Panel (a): Direct SSA
+  num::plt::plot(ssa_U, ssa_V, "SSA Path", "lines lw 1");
+  num::plt::plot(start_U, start_V, "Start (17,1)", "points pt 7 ps 1.2");
+  num::plt::plot(basin_U_high_U, basin_U_high_V, "U-high (76,5)", "points pt 9 ps 1.2");
+  num::plt::plot(basin_V_high_U, basin_V_high_V, "V-high (5,83)", "points pt 13 ps 1.2");
+  num::plt::title("(a) Direct SSA: Trapped in Initial Basin");
+  num::plt::xlabel("U Molecule Count");
+  num::plt::ylabel("V Molecule Count");
+  num::plt::xlim(0, 105);
+  num::plt::ylim(0, 105);
+  num::plt::legend();
   num::plt::next();
 
-  // Panel (b): Mean U and V trajectories
-  num::plt::plot(time_points, mean_U, "<U>", "lines lw 2");
-  num::plt::title("(b) Mean U Population");
-  num::plt::xlabel("Time");
-  num::plt::ylabel("Mean Count");
-  num::plt::next();
+  // Panel (b): Shared Expected-Visits ELSE
+  num::plt::plot(else_U, else_V, "ELSE Path", "lines lw 1");
+  num::plt::plot(start_U, start_V, "Start (17,1)", "points pt 7 ps 1.2");
+  num::plt::plot(basin_U_high_U, basin_U_high_V, "U-high (76,5)", "points pt 9 ps 1.2");
+  num::plt::plot(basin_V_high_U, basin_V_high_V, "V-high (5,83)", "points pt 13 ps 1.2");
+  num::plt::title("(b) Expected-Visits ELSE: Visits Low-Prob Basin");
+  num::plt::xlabel("U Molecule Count");
+  num::plt::ylabel("V Molecule Count");
+  num::plt::xlim(0, 105);
+  num::plt::ylim(0, 105);
+  num::plt::legend();
 
-  // Panel (c): U-V Phase Space Trajectory
-  num::plt::plot(mean_U, mean_V, "Phase Trajectory", "lines lw 2");
-  num::plt::title("(c) U-V Phase Space Trajectory");
-  num::plt::xlabel("<U>");
-  num::plt::ylabel("<V>");
-  num::plt::next();
+  std::cout << "\nRendering 2D State Space Trajectory Comparison in ASCII (140x35)...\n\n";
+  num::plt::show_dumb(140, 35);
 
-  // Panel (d): Ensemble ELSE Exit Times
-  num::plt::plot(traj_indices, ens.exit_times, "Exit Times",
-                 "points pt 7 ps 0.8");
-  num::plt::title("(d) Ensemble ELSE Exit Times");
-  num::plt::xlabel("Trajectory Index");
-  num::plt::ylabel("Exit Time");
-
-  std::cout << "Saving Toggle Switch simulation plots to "
-               "'toggle_switch_results.png'...\n";
+  std::cout << "Saving high-res plot to 'toggle_switch_results.png'...\n";
   num::plt::savefig("toggle_switch_results.png");
 
-  std::cout << "Toggle Switch FSP & Ensemble ELSE simulation completed "
-               "successfully!\n";
+  std::cout << "\nTian-Burrage Toggle Switch Rare-Event Trajectory Reproduction Completed Successfully!\n";
   return 0;
 }

@@ -82,6 +82,15 @@ struct MultiIndex {
   bool operator!=(const MultiIndex& o) const {
     return !(*this == o);
   }
+  bool operator<(const MultiIndex& o) const {
+    if (n_ != o.n_)
+      return n_ < o.n_;
+    for (int8_t i = 0; i < n_; ++i) {
+      if (data_[i] != o.data_[i])
+        return data_[i] < o.data_[i];
+    }
+    return false;
+  }
 
   /// @brief Element-wise addition (stoichiometry application)
   MultiIndex operator+(const MultiIndex& o) const {

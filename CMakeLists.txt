@@ -31,6 +31,7 @@ add_library(markovkit
     src/else/density.cpp
     src/else/fourier.cpp
     src/else/ensemble.cpp
+    src/else/else_trajectory.cpp
     src/else/exponential_fit.cpp
     src/ssa/gillespie.cpp
     src/ssa/tau_leaping.cpp
