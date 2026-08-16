@@ -46,7 +46,7 @@ ELSETrajectory else_trajectory_simulate(const fsp::ReactionSystem& model,
     num::idx n_sub = states.size();
     if (n_sub == 0) break;
 
-    // 2. Build generator matrix Q for local subnetwork
+    // 2. Build generator matrix Q for local subnetwork and exit rates
     num::Matrix Q(n_sub, n_sub, 0.0);
     std::vector<double> exit_rates(n_sub, 0.0);
 
@@ -71,7 +71,7 @@ ELSETrajectory else_trajectory_simulate(const fsp::ReactionSystem& model,
       Q(i, i) = -diag;
     }
 
-    // 3. Solve fundamental matrix Z = -Q^-1
+    // 3. Solve fundamental matrix Z = -Q^-1 to get occupation vector u = Z * e_start
     num::Matrix R = Q;
     num::Matrix Z(n_sub, n_sub, 0.0);
     try {
@@ -91,16 +91,16 @@ ELSETrajectory else_trajectory_simulate(const fsp::ReactionSystem& model,
 
     if (mean_exit_time <= 1e-14 || std::isnan(mean_exit_time)) break;
 
-    // Sample exponential waiting time with mean_exit_time
+    // Sample waiting time tau ~ Exponential(mean_exit_time)
     double u_rand = u_dist(rng);
-    double waiting_time = -mean_exit_time * std::log(1.0 - u_rand * 0.95 + 1e-12);
-    if (waiting_time <= 0.0) waiting_time = mean_exit_time;
+    while (u_rand <= 1e-12) u_rand = u_dist(rng);
+    double waiting_time = -mean_exit_time * std::log(u_rand);
 
     if (current_time + waiting_time > tf) {
       break;
     }
 
-    // Sample boundary exit state
+    // 4. Sample pre-exit state using exit_rates * Z(start_idx, i)
     std::vector<double> preexit_weights(n_sub, 0.0);
     double total_exit_weight = 0.0;
     for (num::idx i = 0; i < n_sub; ++i) {
@@ -123,7 +123,7 @@ ELSETrajectory else_trajectory_simulate(const fsp::ReactionSystem& model,
 
     const auto& preexit_state = states[preexit_idx];
 
-    // Pick outside destination from preexit_state
+    // 5. Pick outside destination state from preexit_state
     std::vector<fsp::MultiIndex> outside_dest;
     std::vector<double> outside_rates;
     double total_out_rate = 0.0;
