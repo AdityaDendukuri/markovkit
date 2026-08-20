@@ -1,99 +1,79 @@
 # markovkit
 
-C++20 library for continuous-time Markov chains and Chemical Master Equation computations.
+C++20 library for Discrete Stochastic Simulation, Chemical Master Equations (CME), Finite State Projection (FSP), and Exact Linear Subnetwork Elimination (ELSE).
 
-The library provides finite state projection, subnetwork elimination, and stochastic simulation methods.
+Built on top of [numerics](../numerics).
 
-## Components
+---
 
-### `fsp`
+## Structure
 
-Finite State Projection methods.
+- **`fsp/`**: State space management, sparse generator construction, and FSP solvers:
+  - `AdaptiveFSP`: Flux-preserving adaptive time-stepping ($\Delta t = \epsilon / \Phi$)
+  - `KrylovFSP`: Vo & Sidje (2016) mass-loss criterion
+- **`else/`**: Exact Linear Subnetwork Elimination (ELSE / FESS):
+  - `Subnetwork`: Restricted generator $R$, fundamental matrix $(-R)^{-1}$, moments $(-R)^{-2}$, exit laws, conditional mean exit time $\tau = u^{(2)}_b / u_b$
+  - `else_step`, `else_trajectory`, `else_ensemble`, `else_density`
+  - `Fourier` & `Talbot` resolvent time-inversion
+- **`ssa/`**: Exact and approximate Monte Carlo:
+  - `gillespie`: Direct exact SSA
+  - `tau_leaping`: Adaptive Poisson tau-leaping
 
-* adaptive FSP
-* Krylov matrix exponential propagation
-* reaction-network state-space construction
-* generator assembly
+---
 
-### `markovkit::else_solver`
-
-Mean-time Ensemble ELSE and Fourier ELSE.
-
-- subnetwork occupation and first-exit laws
-- conditional mean exit times
-- ensemble block solves
-- mean-exit-time and expected-entry-count shedding
-- resolvent/Talbot reconstruction
-
-### `markovkit::ssa`
-
-Stochastic simulation methods.
-
-* Gillespie direct method
-* tau-leaping
-
-The numerical backend provides dense BLAS/LAPACK operations and Krylov methods.
-
-## Requirements
-
-* C++20
-* CMake 3.20+
-* BLAS/LAPACK
-* OpenMP (optional)
-
-Supported platforms are macOS and Linux.
-
-## Build
+## Build & Test
 
 ```bash
-git clone https://github.com/AdityaDendukuri/markovkit.git
-cd markovkit
-
 cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
+cmake --build build -j8
 ctest --test-dir build --output-on-failure
 ```
 
-## Basic use
+---
 
-```cpp
-#include <markovkit.hpp>
+## Examples
 
-using namespace fsp;
+- `fsp_oregonator`: Stiff Field-Körös-Noyes oscillator solved via Adaptive FSP
+- `fsp_toggle_switch`: Gardner bistable mutual-inhibition switch
+- `else_oregonator`: Multi-trajectory ensemble sharing an adaptive subnetwork
+- `else_birth_death`: Subnetwork jumping trajectory for 1D birth-death process
+- `michaelis_menten`: Enzyme kinetics comparing FSP and ELSE Fourier density evolution
+- `laplacian_committor`: Committor evolution on symmetric graph Laplacians
+- `c_lapl`: Fourier/resolvent committor evolution for a Laplacian JSON file
+- `ssa_birth_death`: Gillespie SSA vs Tau-Leaping
 
-ReactionSystem sys;
-sys.stoich_vecs = {
-    MultiIndex{1},
-    MultiIndex{-1}
-};
+### Running examples
 
-sys.propensities = {
-    [](const MultiIndex&, const std::vector<double>& r, double) {
-        return r[0];
-    },
-    [](const MultiIndex& x, const std::vector<double>& r, double) {
-        return r[1] * x[0];
-    }
-};
+Build the examples once, then run the executable from the build directory:
 
-FSPProblem problem;
-problem.model = sys;
-problem.rates = {5.0, 0.1};
-problem.u0 = MultiIndex{0};
-problem.t0 = 0.0;
-problem.tf = 10.0;
-problem.bc = rect_boundary({100});
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j8
 
-AdaptiveFSPParams params;
-params.eps_dt = 0.1;
-params.krylov_m = 30;
-
-auto [solution, diagnostics] =
-    solve_adaptive_fsp(problem, params);
+./build/examples/fsp_oregonator
+./build/examples/fsp_toggle_switch
+./build/examples/else_oregonator
+./build/examples/else_birth_death
+./build/examples/ssa_birth_death
+./build/examples/michaelis_menten
+./build/examples/laplacian_committor
 ```
 
-See the examples directory for additional FSP, ELSE, SSA, toggle-switch, and Oregonator examples.
+The Laplacian resolvent example reads `laplacians/cs-medium.json` by default and
+writes `c_lapl_curves.csv` and `c_lapl_evolution.png`. Pass a JSON path and an
+optional top-left truncation size:
+
+```bash
+./build/examples/c_lapl
+./build/examples/c_lapl laplacians/cs-medium.json 100
+```
+
+The second command evolves the top-left `100 × 100` block, which is useful for
+quick experiments before running the full medium system. PNG rendering requires
+`gnuplot`; the CSV output is written regardless.
+
+---
 
 ## License
 
-MIT License. See `LICENSE`.
+MIT License.

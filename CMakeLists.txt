@@ -6,38 +6,25 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
-
-# Fetch numerics dependency
 FetchContent_Declare(
-  numerics
-  SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../numerics"
+    numerics
+    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../numerics"
 )
 FetchContent_MakeAvailable(numerics)
 
-# Fetch approxchol dependency
-FetchContent_Declare(
-  approxchol
-  SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../approxchol-cpp"
-)
-FetchContent_MakeAvailable(approxchol)
-
-# Precompiled Static Library Target
 add_library(markovkit
     src/fsp/state_space.cpp
     src/fsp/generator.cpp
+    src/fsp/solution.cpp
     src/fsp/solvers/adaptive_fsp.cpp
     src/fsp/solvers/krylov_fsp.cpp
     src/else/subnetwork.cpp
-    src/else/network.cpp
-    src/else/density.cpp
+    src/else/else_solver.cpp
     src/else/fourier.cpp
-    src/else/ensemble.cpp
-    src/else/else_trajectory.cpp
-    src/else/exponential_fit.cpp
+    src/else/laplacian.cpp
     src/ssa/gillespie.cpp
     src/ssa/tau_leaping.cpp
 )
-
 add_library(markovkit::markovkit ALIAS markovkit)
 
 target_include_directories(markovkit PUBLIC
@@ -45,10 +32,7 @@ target_include_directories(markovkit PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(markovkit PUBLIC
-    numerics::numerics
-    approxchol
-)
+target_link_libraries(markovkit PUBLIC numerics::numerics numerics::io)
 
 enable_testing()
 add_subdirectory(tests)

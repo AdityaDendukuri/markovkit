@@ -1,20 +1,23 @@
-# examples/CMakeLists.txt
-# Umbrella target to build all examples: cmake --build build --target markovkit_examples
-add_custom_target(markovkit_examples ALL)
+add_executable(fsp_oregonator fsp_oregonator.cpp)
+target_link_libraries(fsp_oregonator PRIVATE markovkit::markovkit)
 
-# Helper function to register an example target with full control
-function(add_markovkit_example TARGET_NAME SOURCE_FILE)
-    add_executable(${TARGET_NAME} ${SOURCE_FILE} ${ARGN})
-    target_link_libraries(${TARGET_NAME} PRIVATE markovkit::markovkit)
-    add_dependencies(markovkit_examples ${TARGET_NAME})
-endfunction()
+add_executable(fsp_toggle_switch fsp_toggle_switch.cpp)
+target_link_libraries(fsp_toggle_switch PRIVATE markovkit::markovkit)
 
-# ==============================================================================
-# Explicitly Registered Showcase Examples
-# Add your custom example target here!
-# ==============================================================================
+add_executable(else_oregonator else_oregonator.cpp)
+target_link_libraries(else_oregonator PRIVATE markovkit::markovkit)
 
-add_markovkit_example(gene_expression        gene_expression.cpp)
-add_markovkit_example(plot_gene_expression   plot_gene_expression.cpp)
-add_markovkit_example(oregonator_example     oregonator_example.cpp)
-add_markovkit_example(toggle_switch_example  toggle_switch_example.cpp)
+add_executable(else_birth_death else_birth_death.cpp)
+target_link_libraries(else_birth_death PRIVATE markovkit::markovkit)
+
+add_executable(ssa_birth_death ssa_birth_death.cpp)
+target_link_libraries(ssa_birth_death PRIVATE markovkit::markovkit)
+
+add_executable(michaelis_menten michaelis_menten.cpp)
+target_link_libraries(michaelis_menten PRIVATE markovkit::markovkit)
+
+add_executable(laplacian_committor laplacian_committor.cpp)
+target_link_libraries(laplacian_committor PRIVATE markovkit::markovkit)
+
+add_executable(c_lapl c_lapl.cpp)
+target_link_libraries(c_lapl PRIVATE markovkit::markovkit)

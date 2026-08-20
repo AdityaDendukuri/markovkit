@@ -1,6 +1,9 @@
 build/
+build-clang/
+laplacians/
 DiscStochSim-cpp/
 *.cc
 *.h
 .DS_Store
 *.png
+*.csv

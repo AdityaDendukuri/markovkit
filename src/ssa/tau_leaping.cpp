@@ -1,68 +1,54 @@
-/// @file src/ssa/tau_leaping.cpp
-/// @brief Compiled Explicit Poisson Tau-Leaping simulation.
-#include "markovkit/ssa/tau_leaping.hpp"
+#include "ssa/tau_leaping.hpp"
+#include <algorithm>
+#include <cmath>
+#include <random>
 
-namespace markovkit::ssa {
+namespace ssa {
 
-SSATrajectory tau_leaping_simulate(const fsp::ReactionSystem& model,
-                                   const std::vector<num::real>& rates,
-                                   const fsp::MultiIndex& u0,
-                                   num::real t0,
-                                   num::real tf,
-                                   TauLeapingParams params,
-                                   int rng_seed) {
-  SSATrajectory traj;
-  traj.t.push_back(t0);
-  traj.x.push_back(u0);
+Trajectory tau_leaping(const fsp::ReactionSystem& model,
+                       const std::vector<double>& rates,
+                       const MultiIndex& initial,
+                       double t0,
+                       double tf,
+                       LeapOptions options,
+                       int seed) {
+  std::mt19937 rng(seed);
+  Trajectory path;
+  path.t.push_back(t0);
+  path.states.push_back(initial);
 
-  std::mt19937 rng(rng_seed);
+  MultiIndex current = initial;
+  double t = t0;
+  std::vector<double> prop(model.n_reactions(), 0.0);
 
-  fsp::MultiIndex current_x = u0;
-  num::real current_t = t0;
-  num::idx n_rx = model.propensities.size();
-
-  std::vector<num::real> a(n_rx, 0.0);
-
-  while (current_t < tf) {
-    num::real a0 = 0.0;
-    for (num::idx r = 0; r < n_rx; ++r) {
-      a[r] = model.propensities[r](current_x, rates, current_t);
-      if (a[r] < 0.0)
-        a[r] = 0.0;
-      a0 += a[r];
+  while (t < tf) {
+    double total = 0.0;
+    for (std::size_t r = 0; r < model.n_reactions(); ++r) {
+      prop[r] = std::max(0.0, model.propensities[r](current, rates, t));
+      total += prop[r];
     }
+    if (!(total > 0.0)) break;
 
-    if (a0 <= 0.0)
-      break;
+    double dt = options.fixed_step > 0.0 ? options.fixed_step
+                                         : std::max(options.min_step, options.epsilon / total);
+    dt = std::min(dt, tf - t);
+    t += dt;
 
-    num::real tau = params.tau_fixed;
-    if (tau <= 0.0) {
-      tau = std::max(params.min_tau, params.epsilon / a0);
-    }
+    for (std::size_t r = 0; r < model.n_reactions(); ++r) {
+      if (prop[r] <= 0.0) continue;
+      std::poisson_distribution<int> poisson(prop[r] * dt);
+      int count = poisson(rng);
+      if (count <= 0) continue;
 
-    if (current_t + tau > tf)
-      tau = tf - current_t;
-
-    current_t += tau;
-
-    for (num::idx r = 0; r < n_rx; ++r) {
-      if (a[r] <= 0.0)
-        continue;
-      std::poisson_distribution<int> pois(a[r] * tau);
-      int k_r = pois(rng);
-
-      for (std::size_t c = 0; c < current_x.size(); ++c) {
-        current_x[c] += k_r * model.stoich_vecs[r][c];
-        if (current_x[c] < 0)
-          current_x[c] = 0; // Boundary clamp
+      for (std::size_t c = 0; c < current.size(); ++c) {
+        current[c] = std::max(0, current[c] + count * model.stoich_vecs[r][c]);
       }
     }
 
-    traj.t.push_back(current_t);
-    traj.x.push_back(current_x);
+    path.t.push_back(t);
+    path.states.push_back(current);
   }
-
-  return traj;
+  return path;
 }
 
-} // namespace markovkit::ssa
+} // namespace ssa
