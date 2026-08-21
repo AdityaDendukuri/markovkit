@@ -39,7 +39,9 @@ ctest --test-dir build --output-on-failure
 | `else_birth_death` | ELSE trajectory for a birth–death process | `else_birth_death.png` |
 | `ssa_birth_death` | Gillespie SSA and tau-leaping comparison | `ssa_birth_death.png` |
 | `michaelis_menten` | FSP and dense Talbot-density comparison | `michaelis_menten.png` |
-| `density_laplacian` | Talbot-density committor evolution on a reversible graph | `density_laplacian.png` |
+| `density_laplacian` | Talbot density evolution on a graph | `density_laplacian.png` |
+| `laplacian_trajectories` | Reversible ELSE trajectories using dense Cholesky | `laplacian_trajectories.png` |
+| `dense_cholesky_cme` | Dense Cholesky occupation solve for a reversible CME | `dense_cholesky_cme.png` |
 
 Run an example from the repository root after building:
 
@@ -47,6 +49,8 @@ Run an example from the repository root after building:
 ./build/examples/else_oregonator
 ./build/examples/michaelis_menten
 ./build/examples/density_laplacian
+./build/examples/laplacian_trajectories
+./build/examples/dense_cholesky_cme
 ```
 
 `density_laplacian` reads `laplacians/cs-medium.json`. The JSON object must

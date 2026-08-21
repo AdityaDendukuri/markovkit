@@ -3,10 +3,16 @@
 #include "markovkit/boundary_transition.hpp"
 #include <memory>
 #include <numerics.hpp>
+#include <span>
 #include <unordered_map>
 #include <vector>
 
 namespace else_sim {
+
+/// Stationary square-root weights for a reversible CME.
+struct Reversible {
+  std::span<const double> stationary_sqrt;
+};
 
 /// First two occupation moments from a shared factorization of -R.
 struct OccupationMoments {
@@ -28,6 +34,15 @@ public:
              const markovkit::ReactionSystem& model,
              const std::vector<double>& rates,
              double t = 0.0);
+  Subnetwork(const fsp::StateSpace& sp,
+             const markovkit::ReactionSystem& model,
+             const std::vector<double>& rates,
+             Reversible reversible,
+             double t = 0.0);
+  Subnetwork(std::vector<markovkit::State> states,
+             num::SparseMatrix generator,
+             std::vector<markovkit::BoundaryTransition> boundary,
+             Reversible reversible);
   ~Subnetwork();
   Subnetwork(Subnetwork&&) noexcept;
   Subnetwork& operator=(Subnetwork&&) noexcept;
@@ -53,7 +68,7 @@ public:
   // Solve (-R)u = start; u is the expected time spent in each state.
   [[nodiscard]] num::Vector occupation(const num::Vector& start) const;
 
-  // Compute (-R)^-1 starts and (-R)^-2 starts using one LU factorization.
+  // Compute (-R)^-1 starts and (-R)^-2 starts using one factorization.
   [[nodiscard]] OccupationMoments occupation_moments(const num::Matrix& starts) const;
 
   [[nodiscard]] std::vector<double>
@@ -72,6 +87,12 @@ public:
   [[nodiscard]] std::vector<double> cut_time_losses(const num::Vector& occupation) const;
 
 private:
+  Subnetwork(const fsp::StateSpace& sp,
+             const markovkit::ReactionSystem& model,
+             const std::vector<double>& rates,
+             double t,
+             const Reversible* reversible);
+
   std::vector<markovkit::State> states_;
   std::unordered_map<markovkit::State, int> index_;
   num::SparseMatrix R_{0, 0, {}, {}, {0}};

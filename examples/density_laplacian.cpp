@@ -72,8 +72,10 @@ int main() {
   num::plt::subplot(2, 3);
   for (std::size_t panel = 0; panel < count; ++panel) {
     for (std::size_t observable = 0; observable < count; ++observable) {
-      num::plt::plot(
-          times, curves[panel][observable], "C" + std::to_string(observable + 1), "lines lw 2");
+      num::plt::plot(times,
+                     curves[panel][observable],
+                     "C" + std::to_string(observable + 1),
+                     "lines lw 2");
     }
     num::plt::title("start = argmax(C" + std::to_string(panel + 1) + ")");
     num::plt::xlabel("t");

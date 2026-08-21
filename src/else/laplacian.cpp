@@ -1,6 +1,8 @@
 #include "else/laplacian.hpp"
 #include <algorithm>
+#include <limits>
 #include <queue>
+#include <random>
 #include <stdexcept>
 
 namespace else_sim {
@@ -176,6 +178,81 @@ laplacian_density_subnetworks(const num::SparseMatrix& laplacian,
     }
   }
   return subnetworks;
+}
+
+markovkit::Trajectory laplacian_else_trajectory(const num::SparseMatrix& laplacian,
+                                                 const std::vector<double>& stationary_sqrt,
+                                                 num::idx initial,
+                                                 double initial_time,
+                                                 double final_time,
+                                                 ELSEOptions options,
+                                                 int seed) {
+  validate_laplacian(laplacian, stationary_sqrt);
+  if (initial >= laplacian.n_rows() || initial_time > final_time || options.capacity == 0 ||
+      options.capacity > laplacian.n_rows()) {
+    throw std::invalid_argument("invalid Laplacian trajectory request");
+  }
+
+  std::mt19937 random(seed);
+  markovkit::Trajectory trajectory;
+  trajectory.times.push_back(initial_time);
+  trajectory.states.push_back(graph_state(initial));
+
+  num::idx current = initial;
+  double time = initial_time;
+  std::size_t completed_steps = 0;
+  for (; completed_steps < options.maximum_steps && time < final_time; ++completed_steps) {
+    const auto states =
+        laplacian_neighborhood(laplacian, stationary_sqrt, current, options.capacity);
+    auto assembled = laplacian_density_subnetwork(laplacian, stationary_sqrt, states);
+    std::vector<double> local_h;
+    local_h.reserve(states.size());
+    for (num::idx state : states) {
+      local_h.push_back(stationary_sqrt[state]);
+    }
+
+    Subnetwork subnetwork(std::move(assembled.states),
+                          std::move(assembled.generator),
+                          std::move(assembled.boundary),
+                          Reversible{local_h});
+    if (subnetwork.boundary_states().empty()) {
+      break;
+    }
+
+    num::Matrix source(subnetwork.size(), 1, 0.0);
+    source(static_cast<num::idx>(subnetwork.find(graph_state(current))), 0) = 1.0;
+    const auto moments = subnetwork.occupation_moments(source);
+    const auto exit_probabilities = subnetwork.exit_probabilities(moments);
+    std::discrete_distribution<std::size_t> choose_exit(
+        exit_probabilities.begin(), exit_probabilities.end());
+    const num::idx local_exit = subnetwork.boundary_states()[choose_exit(random)];
+    const double waiting_time = subnetwork.conditional_exit_time(moments, local_exit);
+
+    std::vector<num::idx> destinations;
+    std::vector<double> rates;
+    for (const auto& transition : subnetwork.boundary()) {
+      if (transition.source == local_exit) {
+        destinations.push_back(static_cast<num::idx>(transition.destination[0]));
+        rates.push_back(transition.rate);
+      }
+    }
+    if (!(waiting_time > 0.0) || destinations.empty() || time + waiting_time >= final_time) {
+      break;
+    }
+
+    std::discrete_distribution<std::size_t> choose_destination(rates.begin(), rates.end());
+    time += waiting_time;
+    current = destinations[choose_destination(random)];
+    trajectory.times.push_back(time);
+    trajectory.states.push_back(graph_state(current));
+  }
+
+  if (completed_steps < options.maximum_steps && time < final_time &&
+      final_time < std::numeric_limits<double>::infinity()) {
+    trajectory.times.push_back(final_time);
+    trajectory.states.push_back(graph_state(current));
+  }
+  return trajectory;
 }
 
 } // namespace else_sim

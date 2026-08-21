@@ -49,6 +49,39 @@ num::Matrix dense(const num::SparseMatrix& matrix) {
   return result;
 }
 
+num::Matrix symmetric_operator(const num::SparseMatrix& matrix,
+                               std::span<const double> stationary_sqrt) {
+  if (stationary_sqrt.size() != matrix.n_rows() ||
+      !std::all_of(stationary_sqrt.begin(), stationary_sqrt.end(), [](double value) {
+        return value > 0.0;
+      })) {
+    throw std::invalid_argument("reversible weights must be positive and match the subnetwork");
+  }
+
+  num::Matrix result(matrix.n_rows(), matrix.n_cols(), 0.0);
+  for (num::idx row = 0; row < matrix.n_rows(); ++row) {
+    for (num::idx entry = matrix.row_ptr()[row]; entry < matrix.row_ptr()[row + 1]; ++entry) {
+      const num::idx column = matrix.col_idx()[entry];
+      result(row, column) =
+          matrix.values()[entry] * stationary_sqrt[column] / stationary_sqrt[row];
+    }
+  }
+  double scale = 0.0;
+  double symmetry_error = 0.0;
+  for (num::idx row = 0; row < result.rows(); ++row) {
+    for (num::idx column = 0; column < row; ++column) {
+      scale = std::max(scale, std::abs(result(row, column)));
+      scale = std::max(scale, std::abs(result(column, row)));
+      symmetry_error =
+          std::max(symmetry_error, std::abs(result(row, column) - result(column, row)));
+    }
+  }
+  if (symmetry_error > 1e-10 * std::max(1.0, scale)) {
+    throw std::invalid_argument("stationary weights do not symmetrize the subnetwork generator");
+  }
+  return result;
+}
+
 } // namespace
 
 struct Subnetwork::SolverImpl {
@@ -61,13 +94,37 @@ struct Subnetwork::SolverImpl {
     }
   }
 
+  SolverImpl(num::SparseMatrix operator_matrix, std::span<const double> stationary_sqrt)
+      : matrix(std::move(operator_matrix)),
+        weights(stationary_sqrt.begin(), stationary_sqrt.end()) {
+    auto symmetric = symmetric_operator(matrix, stationary_sqrt);
+    cholesky_factor = num::cholesky(num::linalg::assume_spd(std::move(symmetric)));
+    if (!cholesky_factor->success) {
+      throw std::invalid_argument("reversible subnetwork operator is not positive definite");
+    }
+  }
+
   num::SparseMatrix matrix;
   std::optional<num::LUResult> dense_factor;
+  std::optional<num::CholeskyResult> cholesky_factor;
   std::unique_ptr<num::KLUFactor> sparse_factor;
   std::optional<num::LUResult> transpose_factor;
   std::unique_ptr<num::KLUFactor> sparse_transpose_factor;
+  std::vector<double> weights;
 
   void solve(const num::Vector& b, num::Vector& x) const {
+    if (cholesky_factor) {
+      num::Vector transformed_b(b.size(), 0.0);
+      num::Vector transformed_x(b.size(), 0.0);
+      for (num::idx state = 0; state < b.size(); ++state) {
+        transformed_b[state] = b[state] / weights[state];
+      }
+      num::cholesky_solve(*cholesky_factor, transformed_b, transformed_x);
+      for (num::idx state = 0; state < b.size(); ++state) {
+        x[state] = weights[state] * transformed_x[state];
+      }
+      return;
+    }
     if (sparse_factor) {
       sparse_factor->solve(b, x);
     } else {
@@ -79,6 +136,21 @@ struct Subnetwork::SolverImpl {
   }
 
   void solve(const num::Matrix& right_hand_side, num::Matrix& solution) const {
+    if (cholesky_factor) {
+      num::Matrix transformed = right_hand_side;
+      for (num::idx row = 0; row < transformed.rows(); ++row) {
+        for (num::idx column = 0; column < transformed.cols(); ++column) {
+          transformed(row, column) /= weights[row];
+        }
+      }
+      num::cholesky_solve(*cholesky_factor, transformed, solution);
+      for (num::idx row = 0; row < solution.rows(); ++row) {
+        for (num::idx column = 0; column < solution.cols(); ++column) {
+          solution(row, column) *= weights[row];
+        }
+      }
+      return;
+    }
     if (sparse_factor) {
       sparse_factor->solve(right_hand_side, solution);
     } else {
@@ -90,6 +162,18 @@ struct Subnetwork::SolverImpl {
   }
 
   void solve_transpose(const num::Vector& b, num::Vector& x) {
+    if (cholesky_factor) {
+      num::Vector transformed_b(b.size(), 0.0);
+      num::Vector transformed_x(b.size(), 0.0);
+      for (num::idx state = 0; state < b.size(); ++state) {
+        transformed_b[state] = weights[state] * b[state];
+      }
+      num::cholesky_solve(*cholesky_factor, transformed_b, transformed_x);
+      for (num::idx state = 0; state < b.size(); ++state) {
+        x[state] = transformed_x[state] / weights[state];
+      }
+      return;
+    }
     // Only cut-time losses need the transpose, so factor it lazily.
     if (sparse_factor) {
       if (!sparse_transpose_factor) {
@@ -131,6 +215,20 @@ Subnetwork::Subnetwork(const fsp::StateSpace& sp,
                        const markovkit::ReactionSystem& model,
                        const std::vector<double>& rates,
                        double t)
+    : Subnetwork(sp, model, rates, t, nullptr) {}
+
+Subnetwork::Subnetwork(const fsp::StateSpace& sp,
+                       const markovkit::ReactionSystem& model,
+                       const std::vector<double>& rates,
+                       Reversible reversible,
+                       double t)
+    : Subnetwork(sp, model, rates, t, &reversible) {}
+
+Subnetwork::Subnetwork(const fsp::StateSpace& sp,
+                       const markovkit::ReactionSystem& model,
+                       const std::vector<double>& rates,
+                       double t,
+                       const Reversible* reversible)
     : states_(sp.states),
       index_(sp.index) {
   const num::idx n = states_.size();
@@ -146,7 +244,41 @@ Subnetwork::Subnetwork(const fsp::StateSpace& sp,
   }
 
   // Occupation uses the positive transient operator -R.
-  solver_ = std::make_unique<SolverImpl>(negative(R_));
+  auto operator_matrix = negative(R_);
+  solver_ = reversible == nullptr
+                ? std::make_unique<SolverImpl>(std::move(operator_matrix))
+                : std::make_unique<SolverImpl>(std::move(operator_matrix),
+                                               reversible->stationary_sqrt);
+}
+
+Subnetwork::Subnetwork(std::vector<markovkit::State> states,
+                       num::SparseMatrix generator,
+                       std::vector<markovkit::BoundaryTransition> boundary,
+                       Reversible reversible)
+    : states_(std::move(states)),
+      R_(std::move(generator)),
+      total_rates_(states_.size(), 0.0),
+      exit_rates_(states_.size(), 0.0),
+      boundary_(std::move(boundary)) {
+  if (R_.n_rows() != states_.size() || R_.n_cols() != states_.size()) {
+    throw std::invalid_argument("subnetwork generator dimensions do not match its states");
+  }
+  for (num::idx state = 0; state < states_.size(); ++state) {
+    index_[states_[state]] = static_cast<int>(state);
+    total_rates_[state] = -R_(state, state);
+  }
+  for (const auto& transition : boundary_) {
+    if (transition.source >= states_.size()) {
+      throw std::invalid_argument("subnetwork boundary source is out of range");
+    }
+    exit_rates_[transition.source] += transition.rate;
+  }
+  for (num::idx state = 0; state < states_.size(); ++state) {
+    if (exit_rates_[state] > 0.0) {
+      boundary_states_.push_back(state);
+    }
+  }
+  solver_ = std::make_unique<SolverImpl>(negative(R_), reversible.stationary_sqrt);
 }
 
 Subnetwork::~Subnetwork() = default;

@@ -18,3 +18,9 @@ target_link_libraries(michaelis_menten PRIVATE markovkit::markovkit)
 
 add_executable(density_laplacian density_laplacian.cpp)
 target_link_libraries(density_laplacian PRIVATE markovkit::markovkit)
+
+add_executable(laplacian_trajectories laplacian_trajectories.cpp)
+target_link_libraries(laplacian_trajectories PRIVATE markovkit::markovkit)
+
+add_executable(dense_cholesky_cme dense_cholesky_cme.cpp)
+target_link_libraries(dense_cholesky_cme PRIVATE markovkit::markovkit)

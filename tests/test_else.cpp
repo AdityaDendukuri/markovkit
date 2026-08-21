@@ -2,6 +2,7 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <limits>
 #include <vector>
 
 void test_subnetwork_moments_and_exit_law() {
@@ -18,17 +19,31 @@ void test_subnetwork_moments_and_exit_law() {
 
   std::vector<double> rates = {1.0, 1.0};
   else_sim::Subnetwork sub(sp, model, rates);
+  const std::vector<double> h{1.0, 1.0, std::sqrt(0.5)};
+  else_sim::Subnetwork reversible(sp, model, rates, else_sim::Reversible{h});
 
   num::Vector start(3, 0.0);
   start[0] = 1.0;
   auto u = sub.occupation(start);
   assert(u.size() == 3);
   assert(u[0] > 0.0);
+  const auto reversible_u = reversible.occupation(start);
+  for (num::idx state = 0; state < u.size(); ++state) {
+    assert(std::abs(reversible_u[state] - u[state]) < 1e-12);
+  }
 
-  num::Matrix starts(3, 1, 0.0);
+  num::Matrix starts(3, 2, 0.0);
   starts(0, 0) = 1.0;
+  starts(1, 1) = 1.0;
   auto m = sub.occupation_moments(starts);
+  const auto reversible_m = reversible.occupation_moments(starts);
   assert(m.size() == 3);
+  for (num::idx row = 0; row < m.size(); ++row) {
+    for (num::idx column = 0; column < m.starts(); ++column) {
+      assert(std::abs(reversible_m.first(row, column) - m.first(row, column)) < 1e-12);
+      assert(std::abs(reversible_m.second(row, column) - m.second(row, column)) < 1e-12);
+    }
+  }
 
   auto p_exit = sub.exit_probabilities(m, 0);
   double sum_p = 0.0;
@@ -109,6 +124,27 @@ void test_laplacian_column_sum_property() {
   assert(std::abs(R(0, 1) + R(1, 1)) < 1e-12);
 
   std::cout << "[PASS] test_laplacian_column_sum_property (non-uniform h=[1, 2])\n";
+}
+
+void test_laplacian_trajectory_uses_reversible_solver() {
+  const auto laplacian = num::SparseMatrix::from_triplets(
+      3,
+      3,
+      {0, 0, 1, 1, 1, 2, 2},
+      {0, 1, 0, 1, 2, 1, 2},
+      {1.0, -1.0, -1.0, 2.0, -1.0, -1.0, 1.0});
+  const auto path = else_sim::laplacian_else_trajectory(
+      laplacian,
+      {1.0, 1.0, 1.0},
+      0,
+      0.0,
+      std::numeric_limits<double>::infinity(),
+      {.capacity = 2, .maximum_steps = 3},
+      7);
+
+  assert(path.states.size() == 4);
+  assert(path.times.size() == path.states.size());
+  assert(path.times.back() > path.times.front());
 }
 
 void test_two_step_talbot_density() {
@@ -203,6 +239,7 @@ int main() {
   test_subnetwork_moments_and_exit_law();
   test_exact_cut_time_losses();
   test_laplacian_column_sum_property();
+  test_laplacian_trajectory_uses_reversible_solver();
   test_two_step_talbot_density();
   test_single_trajectory_uses_ensemble();
   test_density_respects_capacity();
