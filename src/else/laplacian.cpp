@@ -29,6 +29,13 @@ void validate_laplacian(const num::SparseMatrix& laplacian,
 
 } // namespace
 
+ReversibleLaplacian::ReversibleLaplacian(
+    const num::SparseMatrix& laplacian,
+    const std::vector<double>& stationary_sqrt)
+    : laplacian_(&laplacian), stationary_sqrt_(&stationary_sqrt) {
+  validate_laplacian(laplacian, stationary_sqrt);
+}
+
 std::vector<num::idx> laplacian_neighborhood(const num::SparseMatrix& laplacian,
                                              const std::vector<double>& stationary_sqrt,
                                              num::idx initial,
@@ -180,14 +187,14 @@ laplacian_restrictions(const num::SparseMatrix& laplacian,
   return subnetworks;
 }
 
-markovkit::Trajectory laplacian_else_trajectory(const num::SparseMatrix& laplacian,
-                                                 const std::vector<double>& stationary_sqrt,
+markovkit::Trajectory laplacian_else_trajectory(const ReversibleLaplacian& generator,
                                                  num::idx initial,
                                                  double initial_time,
                                                  double final_time,
                                                  ELSEOptions options,
                                                  int seed) {
-  validate_laplacian(laplacian, stationary_sqrt);
+  const auto& laplacian = generator.matrix();
+  const auto& stationary_sqrt = generator.stationary_sqrt();
   if (initial >= laplacian.n_rows() || initial_time > final_time || options.capacity == 0 ||
       options.capacity > laplacian.n_rows()) {
     throw std::invalid_argument("invalid Laplacian trajectory request");

@@ -134,9 +134,10 @@ void test_laplacian_trajectory_uses_reversible_solver() {
       {0, 0, 1, 1, 1, 2, 2},
       {0, 1, 0, 1, 2, 1, 2},
       {1.0, -1.0, -1.0, 2.0, -1.0, -1.0, 1.0});
+  const std::vector<double> h{1.0, 1.0, 1.0};
+  const else_sim::ReversibleLaplacian generator(laplacian, h);
   const auto path = else_sim::laplacian_else_trajectory(
-      laplacian,
-      {1.0, 1.0, 1.0},
+      generator,
       0,
       0.0,
       std::numeric_limits<double>::infinity(),

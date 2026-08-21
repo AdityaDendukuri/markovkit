@@ -33,6 +33,7 @@ int main() {
   const auto laplacian = num::io::sparse_matrix(data.at("L"));
   const auto h = json_vector<double>(data.at("h"));
   const auto committors = json_matrix(data.at("C"));
+  const else_sim::ReversibleLaplacian generator(laplacian, h);
 
   constexpr std::size_t count = 5;
   constexpr std::size_t samples = 20;
@@ -58,8 +59,7 @@ int main() {
 
     for (std::size_t sample = 0; sample < samples; ++sample) {
       const auto path = else_sim::laplacian_else_trajectory(
-          laplacian,
-          h,
+          generator,
           starts[panel],
           0.0,
           times.back(),

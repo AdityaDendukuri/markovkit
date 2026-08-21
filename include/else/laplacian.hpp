@@ -6,6 +6,24 @@
 
 namespace else_sim {
 
+/// A symmetric Laplacian and the weights defining its reversible Markov generator.
+class ReversibleLaplacian {
+public:
+  ReversibleLaplacian(const num::SparseMatrix& laplacian,
+                      const std::vector<double>& stationary_sqrt);
+
+  [[nodiscard]] const num::SparseMatrix& matrix() const {
+    return *laplacian_;
+  }
+  [[nodiscard]] const std::vector<double>& stationary_sqrt() const {
+    return *stationary_sqrt_;
+  }
+
+private:
+  const num::SparseMatrix* laplacian_;
+  const std::vector<double>* stationary_sqrt_;
+};
+
 /// Connected neighborhood grown in descending stationary weight.
 [[nodiscard]] std::vector<num::idx>
 laplacian_neighborhood(const num::SparseMatrix& laplacian,
@@ -29,8 +47,7 @@ laplacian_restrictions(const num::SparseMatrix& laplacian,
 
 /// Sample a trajectory by eliminating reversible Laplacian subnetworks.
 [[nodiscard]] markovkit::Trajectory
-laplacian_else_trajectory(const num::SparseMatrix& laplacian,
-                          const std::vector<double>& stationary_sqrt,
+laplacian_else_trajectory(const ReversibleLaplacian& generator,
                           num::idx initial,
                           double initial_time,
                           double final_time,
