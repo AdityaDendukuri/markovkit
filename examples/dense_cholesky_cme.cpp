@@ -9,6 +9,7 @@ int main() {
   constexpr double birth_rate = 8.0;
   constexpr double death_rate = 1.0;
 
+  // This model has constant immigration and linear death.
   markovkit::ReactionSystem model{
       .changes = {{1}, {-1}},
       .propensities = {
@@ -19,7 +20,8 @@ int main() {
       }};
   const std::vector<double> rates{birth_rate, death_rate};
 
-  fsp::StateSpace states;
+  cme::StateSpace states;
+  // The finite restriction contains molecule counts from zero to n-1.
   for (num::idx state = 0; state < n; ++state) {
     states.add_state(markovkit::State{static_cast<int>(state)});
   }
@@ -30,11 +32,13 @@ int main() {
     h[state] = h[state - 1] * std::sqrt(birth_rate / (death_rate * state));
   }
 
-  auto restricted = else_sim::restrict_cme(states, model, rates);
-  auto reversible = else_sim::reversible_generator(std::move(restricted), h);
+  auto restricted = cme::restrict_cme(states, model, rates);
+  // Use reversibility to select the Cholesky solve path.
+  auto reversible = cme::reversible_generator(std::move(restricted), h);
   else_sim::Subnetwork subnetwork(std::move(reversible));
   num::Vector source(n, 0.0);
   source[0] = 1.0;
+  // Occupation measures expected time spent in each state before exit.
   const auto time_spent = subnetwork.occupation(source);
 
   std::vector<double> count(n);
@@ -47,11 +51,13 @@ int main() {
   }
   const double occupation_mass = std::accumulate(occupation.begin(), occupation.end(), 0.0);
   const double stationary_mass = std::accumulate(stationary.begin(), stationary.end(), 0.0);
+  // Compare normalized occupation and stationary profiles.
   for (num::idx state = 0; state < n; ++state) {
     occupation[state] /= occupation_mass;
     stationary[state] /= stationary_mass;
   }
 
+  // The plot checks the occupation profile against equilibrium weights.
   num::plt::plot(count, stationary, "stationary", "lines lw 2");
   num::plt::plot(count, occupation, "occupation", "points pt 7 lc rgb '#c0392b'");
   num::plt::title("Reversible CME: dense Cholesky occupation solve");

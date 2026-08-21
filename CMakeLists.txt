@@ -13,13 +13,14 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(numerics)
 
 add_library(markovkit
-    src/fsp/state_space.cpp
-    src/fsp/generator.cpp
+    src/cme/state_space.cpp
+    src/cme/generator.cpp
+    src/cme/reversible.cpp
     src/fsp/solution.cpp
     src/fsp/solvers/adaptive_fsp.cpp
     src/fsp/solvers/krylov_fsp.cpp
     src/else/subnetwork.cpp
-    src/else/else_solver.cpp
+    src/else/trajectory.cpp
     src/else/density.cpp
     src/else/laplacian.cpp
     src/ssa/gillespie.cpp

@@ -1,10 +1,10 @@
-#include "fsp/generator.hpp"
+#include "cme/generator.hpp"
 #include <vector>
 
-namespace fsp {
+namespace cme {
 
 GeneratorResult build_generator(const StateSpace& sp,
-                                const markovkit::ReactionSystem& model,
+                                const ReactionSystem& model,
                                 const std::vector<double>& rates,
                                 double t,
                                 bool absorbing) {
@@ -21,11 +21,12 @@ GeneratorResult build_generator(const StateSpace& sp,
   std::vector<double> diag(n, 0.0);
   std::vector<markovkit::BoundaryTransition> boundary;
 
-  // Columns are source states: A(i,j) is the rate j -> i.
+  // Assemble column-oriented jumps and record exits.
   for (int j = 0; j < n; ++j) {
     const markovkit::State& x = sp.states[j];
     double col_sum = 0.0;
 
+    // Each enabled reaction contributes one jump from this source state.
     for (std::size_t k = 0; k < model.size(); ++k) {
       double alpha = model.propensities[k](x, rates, t);
       if (alpha <= 0.0) {
@@ -61,7 +62,21 @@ GeneratorResult build_generator(const StateSpace& sp,
   num::SparseMatrix A = num::SparseMatrix::from_triplets(
       static_cast<num::idx>(n), static_cast<num::idx>(n), rows, cols, vals);
 
+  // Boundary metadata supports truncation control and ELSE exits.
   return {std::move(A), std::move(exit_rate_boundary), std::move(diag), std::move(boundary)};
 }
 
-} // namespace fsp
+RestrictedGenerator restrict_cme(const StateSpace& states,
+                                 const ReactionSystem& model,
+                                 const std::vector<double>& rates,
+                                 double time) {
+  // Keep boundary loss in the restricted generator diagonal.
+  auto assembled = build_generator(states, model, rates, time, true);
+  return {states.states,
+          states.index,
+          std::move(assembled.matrix),
+          std::move(assembled.boundary),
+          false};
+}
+
+} // namespace cme

@@ -1,57 +1,19 @@
 #include "else/density.hpp"
 #include <algorithm>
 #include <cmath>
-#include <memory>
 #include <stdexcept>
 
 namespace else_sim {
 
-// Precomputed boundary edge transfer entry from subnetwork s to s+1
+// This stores a boundary transfer between adjacent subnetworks.
 struct BoundaryTransfer {
   num::idx source;
   num::idx target_local;
   double rate;
 };
 
-class ShiftedSolver {
-public:
-  ShiftedSolver(const num::SparseMatrix& matrix, bool symmetric_pattern) {
-    // LAPACK has lower overhead for small systems; sparse fill dominates larger ones.
-    constexpr num::idx dense_limit = 128;
-    if (matrix.n_rows() <= dense_limit) {
-      dense = std::make_unique<num::DenseResolventSolver>(matrix);
-      return;
-    }
-    if (!num::sparse_resolvent_available()) {
-      throw std::runtime_error("large Talbot systems require the sparse complex backend");
-    }
-    sparse = std::make_unique<num::SparseResolventSolver>(
-        matrix, num::SparseResolventOptions{.symmetric_pattern = symmetric_pattern});
-  }
-
-  void factorize(num::cplx shift) {
-    if (dense) {
-      dense->factorize(shift);
-    } else {
-      sparse->factorize(shift);
-    }
-  }
-
-  void solve(const std::vector<num::cplx>& rhs, std::vector<num::cplx>& result) const {
-    if (dense) {
-      dense->solve(rhs, result);
-    } else {
-      sparse->solve(rhs, result);
-    }
-  }
-
-private:
-  std::unique_ptr<num::DenseResolventSolver> dense;
-  std::unique_ptr<num::SparseResolventSolver> sparse;
-};
-
 struct TalbotDensitySolver::Impl {
-  explicit Impl(std::vector<RestrictedGenerator> input_subnetworks)
+  explicit Impl(std::vector<cme::RestrictedGenerator> input_subnetworks)
       : subnetworks(std::move(input_subnetworks)) {
     if (subnetworks.empty()) {
       throw std::invalid_argument("Talbot density requires at least one ELSE subnetwork");
@@ -70,7 +32,9 @@ struct TalbotDensitySolver::Impl {
           states.push_back(state);
         }
       }
-      solvers.emplace_back(subnetwork.generator, subnetwork.symmetric_pattern);
+      solvers.emplace_back(
+          subnetwork.generator,
+          num::AutoResolventOptions{.symmetric_pattern = subnetwork.symmetric_pattern});
     }
 
     // Resolve global boundary states to local indices once, outside the contour loop.
@@ -115,7 +79,8 @@ struct TalbotDensitySolver::Impl {
           n_samples, std::vector<num::cplx>(subnetworks[s].states.size(), num::cplx(0.0, 0.0)));
     }
 
-    for (const auto& node : num::talbot_nodes(time, nodes)) {
+    num::inverse_laplace_accumulate(time, nodes, [&](num::cplx shift, num::cplx weight) {
+      // Each contour node starts with empty inter-subnetwork arrivals.
       for (std::size_t s = 0; s < subnetworks.size(); ++s) {
         for (std::size_t sample = 0; sample < n_samples; ++sample) {
           std::fill(arrivals[s][sample].begin(), arrivals[s][sample].end(), num::cplx(0.0, 0.0));
@@ -134,7 +99,7 @@ struct TalbotDensitySolver::Impl {
 
       // Factor once per shift and reuse it for all initial conditions.
       for (std::size_t s = 0; s < subnetworks.size(); ++s) {
-        solvers[s].factorize(node.shift);
+        solvers[s].factorize(shift);
 
         for (std::size_t sample = 0; sample < n_samples; ++sample) {
           solvers[s].solve(arrivals[s][sample], occupations[s][sample]);
@@ -142,7 +107,7 @@ struct TalbotDensitySolver::Impl {
 
           // node.weight already includes the Talbot quadrature scale.
           for (num::idx local = 0; local < subnetworks[s].states.size(); ++local) {
-            density[sample][position[subnetworks[s].states[local]]] += node.weight * occ[local];
+            density[sample][position[subnetworks[s].states[local]]] += weight * occ[local];
           }
 
           // B_s (zI-R_s)^-1 supplies the next subnetwork's arrival density.
@@ -153,36 +118,30 @@ struct TalbotDensitySolver::Impl {
           }
         }
       }
-    }
+    });
 
     // Roundoff may create tiny negative real parts; clip before normalization.
     std::vector<DensitySolution> result;
     result.reserve(n_samples);
     for (std::size_t sample = 0; sample < n_samples; ++sample) {
       DensitySolution solution{states, std::vector<double>(n_global, 0.0)};
-      double mass = 0.0;
       for (num::idx i = 0; i < n_global; ++i) {
-        solution.probability[i] = std::max(0.0, density[sample][i].real());
-        mass += solution.probability[i];
+        solution.probability[i] = density[sample][i].real();
       }
-      if (mass > 0.0) {
-        for (double& p : solution.probability) {
-          p /= mass;
-        }
-      }
+      num::clip_and_normalize_nonnegative(solution.probability);
       result.push_back(std::move(solution));
     }
     return result;
   }
 
-  std::vector<RestrictedGenerator> subnetworks;
+  std::vector<cme::RestrictedGenerator> subnetworks;
   std::vector<markovkit::State> states;
   std::unordered_map<markovkit::State, num::idx> position;
-  std::vector<ShiftedSolver> solvers;
+  std::vector<num::AutoResolventSolver> solvers;
   std::vector<std::vector<BoundaryTransfer>> transfers;
 };
 
-TalbotDensitySolver::TalbotDensitySolver(std::vector<RestrictedGenerator> subnetworks)
+TalbotDensitySolver::TalbotDensitySolver(std::vector<cme::RestrictedGenerator> subnetworks)
     : impl_(std::make_unique<Impl>(std::move(subnetworks))) {}
 
 TalbotDensitySolver::~TalbotDensitySolver() = default;
@@ -206,6 +165,7 @@ DensitySolution TalbotDensitySolver::solve(const std::map<markovkit::State, doub
 
 std::vector<DensitySolution> TalbotDensitySolver::solve(
     const std::vector<markovkit::State>& initial_states, double time, num::idx nodes) {
+  // Convert point masses to the shared batched representation.
   std::vector<std::map<markovkit::State, double>> initial;
   initial.reserve(initial_states.size());
   for (const auto& state : initial_states) {

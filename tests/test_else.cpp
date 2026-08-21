@@ -5,23 +5,23 @@
 #include <limits>
 #include <vector>
 
-void test_subnetwork_moments_and_exit_law() {
+void test_subnetwork_occupation_integrals_and_exit_law() {
   markovkit::ReactionSystem model;
   model.changes = {{1}, {-1}};
   model.propensities = {
       [](const markovkit::State&, const std::vector<double>& r, double) { return r[0]; },
       [](const markovkit::State& x, const std::vector<double>& r, double) { return r[1] * x[0]; }};
 
-  fsp::StateSpace sp;
+  cme::StateSpace sp;
   sp.add_state({0});
   sp.add_state({1});
   sp.add_state({2});
 
   std::vector<double> rates = {1.0, 1.0};
-  else_sim::Subnetwork sub(else_sim::restrict_cme(sp, model, rates));
+  else_sim::Subnetwork sub(cme::restrict_cme(sp, model, rates));
   const std::vector<double> h{1.0, 1.0, std::sqrt(0.5)};
   else_sim::Subnetwork reversible(
-      else_sim::reversible_generator(else_sim::restrict_cme(sp, model, rates), h));
+      cme::reversible_generator(cme::restrict_cme(sp, model, rates), h));
 
   num::Vector start(3, 0.0);
   start[0] = 1.0;
@@ -36,29 +36,31 @@ void test_subnetwork_moments_and_exit_law() {
   num::Matrix starts(3, 2, 0.0);
   starts(0, 0) = 1.0;
   starts(1, 1) = 1.0;
-  auto m = sub.occupation_moments(starts);
-  const auto reversible_m = reversible.occupation_moments(starts);
-  assert(m.size() == 3);
-  for (num::idx row = 0; row < m.size(); ++row) {
-    for (num::idx column = 0; column < m.starts(); ++column) {
-      assert(std::abs(reversible_m.first(row, column) - m.first(row, column)) < 1e-12);
-      assert(std::abs(reversible_m.second(row, column) - m.second(row, column)) < 1e-12);
+  auto integrals = sub.occupation_integrals(starts);
+  const auto reversible_integrals = reversible.occupation_integrals(starts);
+  assert(integrals.size() == 3);
+  for (num::idx row = 0; row < integrals.size(); ++row) {
+    for (num::idx column = 0; column < integrals.starts(); ++column) {
+      assert(std::abs(reversible_integrals.occupation(row, column) -
+                      integrals.occupation(row, column)) < 1e-12);
+      assert(std::abs(reversible_integrals.time_weighted_occupation(row, column) -
+                      integrals.time_weighted_occupation(row, column)) < 1e-12);
     }
   }
 
-  auto p_exit = sub.exit_probabilities(m, 0);
+  auto p_exit = sub.exit_probabilities(integrals, 0);
   double sum_p = 0.0;
   for (double p : p_exit)
     sum_p += p;
   assert(std::abs(sum_p - 1.0) < 1e-10);
 
-  // Conditional mean time is positive
+  // Conditional mean exit time is positive.
   for (num::idx b : sub.boundary_states()) {
-    double tau = sub.conditional_exit_time(m, b, 0);
+    double tau = sub.conditional_exit_time(integrals, b, 0);
     assert(tau >= 0.0);
   }
 
-  std::cout << "[PASS] test_subnetwork_moments_and_exit_law\n";
+  std::cout << "[PASS] test_subnetwork_occupation_integrals_and_exit_law\n";
 }
 
 void test_exact_cut_time_losses() {
@@ -69,7 +71,7 @@ void test_exact_cut_time_losses() {
   // u = Z * e1 = [0.6, 0.2]
   // Z^T 1 = [0.8, 0.6]
   // Delta T = [0.6 * (0.8 / 0.6), 0.2 * (0.6 / 0.4)] = [0.8, 0.3]
-  fsp::StateSpace sp;
+  cme::StateSpace sp;
   sp.add_state({0});
   sp.add_state({1});
 
@@ -87,7 +89,7 @@ void test_exact_cut_time_losses() {
       },
   };
 
-  else_sim::Subnetwork sub(else_sim::restrict_cme(sp, model, {}));
+  else_sim::Subnetwork sub(cme::restrict_cme(sp, model, {}));
   num::Vector p0(2, 0.0);
   p0[0] = 1.0;
   auto u = sub.occupation(p0);
@@ -112,7 +114,7 @@ void test_laplacian_column_sum_property() {
   const auto L = num::SparseMatrix::from_triplets(2, 2, rows, cols, vals);
   const std::vector<double> h{1.0, 2.0};
 
-  auto step = else_sim::restrict_laplacian(L, h, {0, 1});
+  auto step = cme::restrict_laplacian(L, h, {0, 1});
   const auto& R = step.generator;
 
   assert(std::abs(R(0, 0) - (-4.0)) < 1e-12);
@@ -129,20 +131,15 @@ void test_laplacian_column_sum_property() {
 
 void test_laplacian_trajectory_uses_reversible_solver() {
   const auto laplacian = num::SparseMatrix::from_triplets(
-      3,
-      3,
-      {0, 0, 1, 1, 1, 2, 2},
-      {0, 1, 0, 1, 2, 1, 2},
-      {1.0, -1.0, -1.0, 2.0, -1.0, -1.0, 1.0});
+      3, 3, {0, 0, 1, 1, 1, 2, 2}, {0, 1, 0, 1, 2, 1, 2}, {1.0, -1.0, -1.0, 2.0, -1.0, -1.0, 1.0});
   const std::vector<double> h{1.0, 1.0, 1.0};
-  const else_sim::ReversibleLaplacian generator(laplacian, h);
-  const auto path = else_sim::laplacian_else_trajectory(
-      generator,
-      0,
-      0.0,
-      std::numeric_limits<double>::infinity(),
-      {.capacity = 2, .maximum_steps = 3},
-      7);
+  const cme::ReversibleLaplacian generator(laplacian, h);
+  const auto path = else_sim::laplacian_else_trajectory(generator,
+                                                        0,
+                                                        0.0,
+                                                        std::numeric_limits<double>::infinity(),
+                                                        {.capacity = 2, .maximum_steps = 3},
+                                                        7);
 
   assert(path.states.size() == 4);
   assert(path.times.size() == path.states.size());
@@ -153,13 +150,13 @@ void test_two_step_talbot_density() {
   // Two-step chain:
   // Step 0: State {0}, generator R = [-2], exit edge to {1} with rate 2.0
   // Step 1: State {1}, generator R = [-3], exit edge to {2} with rate 3.0
-  else_sim::RestrictedGenerator step0;
+  cme::RestrictedGenerator step0;
   step0.states = {{0}};
   step0.index[step0.states[0]] = 0;
   step0.generator = num::SparseMatrix::from_triplets(1, 1, {0}, {0}, {-2.0});
   step0.boundary.push_back({0, {1}, 2.0});
 
-  else_sim::RestrictedGenerator step1;
+  cme::RestrictedGenerator step1;
   step1.states = {{1}};
   step1.index[step1.states[0]] = 0;
   step1.generator = num::SparseMatrix::from_triplets(1, 1, {0}, {0}, {-3.0});
@@ -226,19 +223,14 @@ void test_density_respects_capacity() {
 }
 
 void test_trajectory_step_limit() {
-  const auto path = else_sim::else_trajectory(birth_death_model(),
-                                               {5.0, 0.1},
-                                               {0},
-                                               0.0,
-                                               100.0,
-                                               {.capacity = 12, .maximum_steps = 5},
-                                               17);
+  const auto path = else_sim::else_trajectory(
+      birth_death_model(), {5.0, 0.1}, {0}, 0.0, 100.0, {.capacity = 12, .maximum_steps = 5}, 17);
   assert(path.states.size() == 6);
   assert(path.times.back() < 100.0);
 }
 
 int main() {
-  test_subnetwork_moments_and_exit_law();
+  test_subnetwork_occupation_integrals_and_exit_law();
   test_exact_cut_time_losses();
   test_laplacian_column_sum_property();
   test_laplacian_trajectory_uses_reversible_solver();

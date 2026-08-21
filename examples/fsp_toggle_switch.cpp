@@ -2,6 +2,7 @@
 #include <vector>
 
 int main() {
+  // Mutual cubic repression creates two preferred expression states.
   const double alpha = 20.0;
   const double beta = 400.0;
   const double K = 100.0;
@@ -31,6 +32,7 @@ int main() {
       [](const markovkit::State& x, const std::vector<double>& r, double) { return r[7] * x[1]; },
   };
 
+  // The distribution starts at the symmetric expression state.
   fsp::FSPProblem prob;
   prob.model = model;
   prob.u0 = {100, 100};
@@ -39,6 +41,7 @@ int main() {
   prob.rates = rates;
   prob.bc = fsp::rect_boundary(500);
 
+  // Absolute pruning keeps the adaptive support compact.
   fsp::AdaptiveFSPParams params;
   params.eps_dt = 10.0;
   params.prob_quantile = 0.0;
@@ -47,6 +50,7 @@ int main() {
   params.expansion_depth = 5;
   params.save_interval = 200;
 
+  // Track the transient distribution on an adaptive state space.
   const auto solution = std::get<0>(fsp::solve_adaptive_fsp(prob, params));
   const auto means = solution.mean_trajectory();
 
@@ -58,6 +62,7 @@ int main() {
   }
 
   const int last = solution.n_snapshots() - 1;
+  // Reduce the final joint distribution to U and V marginals.
   const auto marginal_u = solution.marginal(last, 0);
   const auto marginal_v = solution.marginal(last, 1);
   std::vector<double> counts_u, probs_u, counts_v, probs_v;
@@ -74,6 +79,7 @@ int main() {
     }
   }
 
+  // Plot transient means, support size, and terminal marginals.
   num::plt::subplot(2, 2);
   num::plt::plot(solution.times, u, "U", "lines lw 2");
   num::plt::plot(solution.times, v, "V", "lines lw 2");

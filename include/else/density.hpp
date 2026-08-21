@@ -1,6 +1,6 @@
 #pragma once
-#include "else/else_solver.hpp"
 #include "else/subnetwork.hpp"
+#include "else/trajectory.hpp"
 #include <map>
 #include <memory>
 #include <numerics.hpp>
@@ -17,7 +17,7 @@ struct DensitySolution {
 /// Small shifted systems use dense LU; larger systems use sparse UMFPACK.
 class TalbotDensitySolver {
 public:
-  explicit TalbotDensitySolver(std::vector<RestrictedGenerator> subnetworks);
+  explicit TalbotDensitySolver(std::vector<cme::RestrictedGenerator> subnetworks);
   ~TalbotDensitySolver();
   TalbotDensitySolver(TalbotDensitySolver&&) noexcept;
   TalbotDensitySolver& operator=(TalbotDensitySolver&&) noexcept;

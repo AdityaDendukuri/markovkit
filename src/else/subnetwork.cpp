@@ -1,138 +1,32 @@
 #include "else/subnetwork.hpp"
-#include "fsp/generator.hpp"
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
 
 namespace else_sim {
-namespace {
-
-constexpr num::idx sparse_threshold = 32;
-
-num::SparseMatrix negative(const num::SparseMatrix& matrix) {
-  std::vector<double> values(matrix.values(), matrix.values() + matrix.nnz());
-  for (double& value : values) {
-    value = -value;
-  }
-  return {matrix.n_rows(),
-          matrix.n_cols(),
-          std::move(values),
-          std::vector<num::idx>(matrix.col_idx(), matrix.col_idx() + matrix.nnz()),
-          std::vector<num::idx>(matrix.row_ptr(), matrix.row_ptr() + matrix.n_rows() + 1)};
-}
-
-num::SparseMatrix transpose(const num::SparseMatrix& matrix) {
-  std::vector<num::idx> rows;
-  std::vector<num::idx> columns;
-  std::vector<double> values;
-  rows.reserve(matrix.nnz());
-  columns.reserve(matrix.nnz());
-  values.reserve(matrix.nnz());
-  for (num::idx row = 0; row < matrix.n_rows(); ++row) {
-    for (num::idx entry = matrix.row_ptr()[row]; entry < matrix.row_ptr()[row + 1]; ++entry) {
-      rows.push_back(matrix.col_idx()[entry]);
-      columns.push_back(row);
-      values.push_back(matrix.values()[entry]);
-    }
-  }
-  return num::SparseMatrix::from_triplets(
-      matrix.n_cols(), matrix.n_rows(), rows, columns, values);
-}
-
-num::Matrix dense(const num::SparseMatrix& matrix) {
-  num::Matrix result(matrix.n_rows(), matrix.n_cols(), 0.0);
-  for (num::idx row = 0; row < matrix.n_rows(); ++row) {
-    for (num::idx entry = matrix.row_ptr()[row]; entry < matrix.row_ptr()[row + 1]; ++entry) {
-      result(row, matrix.col_idx()[entry]) = matrix.values()[entry];
-    }
-  }
-  return result;
-}
-
-num::Matrix symmetric_operator(const num::SparseMatrix& matrix,
-                               std::span<const double> stationary_sqrt) {
-  if (stationary_sqrt.size() != matrix.n_rows() ||
-      !std::all_of(stationary_sqrt.begin(), stationary_sqrt.end(), [](double value) {
-        return value > 0.0;
-      })) {
-    throw std::invalid_argument("reversible weights must be positive and match the subnetwork");
-  }
-
-  num::Matrix result(matrix.n_rows(), matrix.n_cols(), 0.0);
-  for (num::idx row = 0; row < matrix.n_rows(); ++row) {
-    for (num::idx entry = matrix.row_ptr()[row]; entry < matrix.row_ptr()[row + 1]; ++entry) {
-      const num::idx column = matrix.col_idx()[entry];
-      result(row, column) =
-          matrix.values()[entry] * stationary_sqrt[column] / stationary_sqrt[row];
-    }
-  }
-  double scale = 0.0;
-  double symmetry_error = 0.0;
-  for (num::idx row = 0; row < result.rows(); ++row) {
-    for (num::idx column = 0; column < row; ++column) {
-      scale = std::max(scale, std::abs(result(row, column)));
-      scale = std::max(scale, std::abs(result(column, row)));
-      symmetry_error =
-          std::max(symmetry_error, std::abs(result(row, column) - result(column, row)));
-    }
-  }
-  if (symmetry_error > 1e-10 * std::max(1.0, scale)) {
-    throw std::invalid_argument("stationary weights do not symmetrize the subnetwork generator");
-  }
-  return result;
-}
-
-} // namespace
-
-RestrictedGenerator restrict_cme(const fsp::StateSpace& states,
-                                 const markovkit::ReactionSystem& model,
-                                 const std::vector<double>& rates,
-                                 double time) {
-  auto assembled = fsp::build_generator(states, model, rates, time, true);
-  return {states.states,
-          states.index,
-          std::move(assembled.matrix),
-          std::move(assembled.boundary),
-          false};
-}
-
-ReversibleGenerator reversible_generator(
-    RestrictedGenerator restricted,
-    std::span<const double> stationary_sqrt) {
-  std::vector<double> weights(stationary_sqrt.begin(), stationary_sqrt.end());
-  auto symmetric = symmetric_operator(negative(restricted.generator), weights);
-  return ReversibleGenerator(
-      std::move(restricted), std::move(weights), std::move(symmetric));
-}
 
 struct Subnetwork::SolverImpl {
+  // General subnetworks use an automatically selected dense or sparse solver.
   explicit SolverImpl(num::SparseMatrix operator_matrix)
-      : matrix(std::move(operator_matrix)) {
-    if (matrix.n_rows() >= sparse_threshold && num::klu_available()) {
-      sparse_factor = std::make_unique<num::KLUFactor>(matrix);
-    } else {
-      dense_factor = num::lu(dense(matrix));
-    }
-  }
+      : linear_factor(std::make_unique<num::AutoLinearSolver>(operator_matrix)) {}
 
   SolverImpl(num::Matrix symmetric, std::vector<double> stationary_sqrt)
       : weights(std::move(stationary_sqrt)) {
+    // Reversible subnetworks reduce to a positive-definite Cholesky solve.
     cholesky_factor = num::cholesky(num::linalg::assume_spd(std::move(symmetric)));
     if (!cholesky_factor->success) {
       throw std::invalid_argument("reversible subnetwork operator is not positive definite");
     }
   }
 
-  num::SparseMatrix matrix{0, 0, {}, {}, {0}};
-  std::optional<num::LUResult> dense_factor;
+  std::unique_ptr<num::AutoLinearSolver> linear_factor;
   std::optional<num::CholeskyResult> cholesky_factor;
-  std::unique_ptr<num::KLUFactor> sparse_factor;
-  std::optional<num::LUResult> transpose_factor;
-  std::unique_ptr<num::KLUFactor> sparse_transpose_factor;
   std::vector<double> weights;
+  mutable num::InverseDiagonalWorkspace inverse_workspace;
 
   void solve(const num::Vector& b, num::Vector& x) const {
     if (cholesky_factor) {
+      // Convert between generator and symmetric coordinates around the solve.
       num::Vector transformed_b(b.size(), 0.0);
       num::Vector transformed_x(b.size(), 0.0);
       for (num::idx state = 0; state < b.size(); ++state) {
@@ -144,14 +38,7 @@ struct Subnetwork::SolverImpl {
       }
       return;
     }
-    if (sparse_factor) {
-      sparse_factor->solve(b, x);
-    } else {
-      if (!dense_factor) {
-        throw std::logic_error("missing dense subnetwork factorization");
-      }
-      num::lu_solve(*dense_factor, b, x);
-    }
+    linear_factor->solve(b, x);
   }
 
   void solve(const num::Matrix& right_hand_side, num::Matrix& solution) const {
@@ -170,18 +57,12 @@ struct Subnetwork::SolverImpl {
       }
       return;
     }
-    if (sparse_factor) {
-      sparse_factor->solve(right_hand_side, solution);
-    } else {
-      if (!dense_factor) {
-        throw std::logic_error("missing dense subnetwork factorization");
-      }
-      num::lu_solve(*dense_factor, right_hand_side, solution);
-    }
+    linear_factor->solve(right_hand_side, solution);
   }
 
   void solve_transpose(const num::Vector& b, num::Vector& x) {
     if (cholesky_factor) {
+      // The transpose solve reverses the similarity scaling.
       num::Vector transformed_b(b.size(), 0.0);
       num::Vector transformed_x(b.size(), 0.0);
       for (num::idx state = 0; state < b.size(); ++state) {
@@ -193,56 +74,35 @@ struct Subnetwork::SolverImpl {
       }
       return;
     }
-    // Only cut-time losses need the transpose, so factor it lazily.
-    if (sparse_factor) {
-      if (!sparse_transpose_factor) {
-        sparse_transpose_factor = std::make_unique<num::KLUFactor>(transpose(matrix));
-      }
-      sparse_transpose_factor->solve(b, x);
-      return;
-    }
-    if (!transpose_factor) {
-      transpose_factor = num::lu(dense(transpose(matrix)));
-    }
-    if (!transpose_factor) {
-      throw std::logic_error("missing transposed subnetwork factorization");
-    }
-    num::lu_solve(*transpose_factor, b, x);
+    linear_factor->solve_transpose(b, x);
   }
 
   void inverse_diagonal(std::vector<double>& diagonal) const {
-    const num::idx n = diagonal.size();
-    constexpr num::idx block_size = 64;
-
-    // Solve blocks of basis vectors; never materialize the full inverse.
-    for (num::idx start = 0; start < n; start += block_size) {
-      const num::idx current_block = std::min(block_size, n - start);
-      num::Matrix right_hand_side(n, current_block, 0.0);
-      for (num::idx column = 0; column < current_block; ++column) {
-        right_hand_side(start + column, column) = 1.0;
-      }
-      num::Matrix solution(n, current_block, 0.0);
-      solve(right_hand_side, solution);
-      for (num::idx column = 0; column < current_block; ++column) {
-        diagonal[start + column] = solution(start + column, column);
-      }
+    // Reuse workspace while extracting the fundamental matrix diagonal.
+    num::Vector result(diagonal.size(), 0.0);
+    if (cholesky_factor) {
+      num::inverse_diagonal(*cholesky_factor, result, inverse_workspace);
+    } else {
+      num::inverse_diagonal(*linear_factor, result, inverse_workspace);
     }
+    num::copy_to(result, diagonal);
   }
 };
 
-Subnetwork::Subnetwork(RestrictedGenerator restricted) {
+Subnetwork::Subnetwork(cme::RestrictedGenerator restricted) {
   initialize(std::move(restricted));
-  solver_ = std::make_unique<SolverImpl>(negative(R_));
+  solver_ = std::make_unique<SolverImpl>(num::scaled(R_, -1.0));
 }
 
-Subnetwork::Subnetwork(ReversibleGenerator reversible) {
-  auto weights = std::move(reversible.stationary_sqrt_);
-  auto symmetric = std::move(reversible.symmetric_operator_);
-  initialize(std::move(reversible.restricted_));
+Subnetwork::Subnetwork(cme::ReversibleGenerator reversible) {
+  auto weights = std::move(reversible.stationary_sqrt);
+  auto symmetric = std::move(reversible.symmetric_operator);
+  initialize(std::move(reversible.restricted));
   solver_ = std::make_unique<SolverImpl>(std::move(symmetric), std::move(weights));
 }
 
-void Subnetwork::initialize(RestrictedGenerator restricted) {
+void Subnetwork::initialize(cme::RestrictedGenerator restricted) {
+  // Cache the restricted generator and its boundary exit rates.
   states_ = std::move(restricted.states);
   index_ = std::move(restricted.index);
   R_ = std::move(restricted.generator);
@@ -281,63 +141,55 @@ int Subnetwork::find(const markovkit::State& x) const {
 }
 
 num::Vector Subnetwork::occupation(const num::Vector& start) const {
+  // Solving -R u = p0 integrates the transient state probabilities.
   num::Vector u(size(), 0.0);
   solver_->solve(start, u);
   return u;
 }
 
-OccupationMoments Subnetwork::occupation_moments(const num::Matrix& starts) const {
-  OccupationMoments m;
-  m.first = num::Matrix(size(), starts.cols(), 0.0);
-  m.second = num::Matrix(size(), starts.cols(), 0.0);
-  solver_->solve(starts, m.first);
-  // A second solve gives (-R)^-2 starts without forming (-R)^-1.
-  solver_->solve(m.first, m.second);
-  return m;
+OccupationIntegrals Subnetwork::occupation_integrals(const num::Matrix& starts) const {
+  OccupationIntegrals integrals;
+  integrals.occupation = num::Matrix(size(), starts.cols(), 0.0);
+  integrals.time_weighted_occupation = num::Matrix(size(), starts.cols(), 0.0);
+  solver_->solve(starts, integrals.occupation);
+  // Applying (-R)^-1 twice gives integral t p(t) dt without forming the inverse.
+  solver_->solve(integrals.occupation, integrals.time_weighted_occupation);
+  return integrals;
 }
 
 std::vector<double> Subnetwork::exit_probabilities(const num::Vector& occupancy) const {
+  // Integrated boundary flux gives the exit-state distribution.
   std::vector<double> probs;
   probs.reserve(boundary_states_.size());
-  double total = 0.0;
   for (num::idx b : boundary_states_) {
     double p = exit_rates_[b] * std::max(0.0, occupancy[b]);
     probs.push_back(p);
-    total += p;
   }
-  if (total > 0.0) {
-    for (double& p : probs) {
-      p /= total;
-    }
-  }
+  num::clip_and_normalize_nonnegative(probs);
   return probs;
 }
 
-std::vector<double> Subnetwork::exit_probabilities(const OccupationMoments& m, num::idx col) const {
+std::vector<double> Subnetwork::exit_probabilities(const OccupationIntegrals& integrals,
+                                                   num::idx col) const {
   std::vector<double> probs;
   probs.reserve(boundary_states_.size());
-  double total = 0.0;
   for (num::idx b : boundary_states_) {
-    double p = exit_rates_[b] * std::max(0.0, m.first(b, col));
+    double p = exit_rates_[b] * std::max(0.0, integrals.occupation(b, col));
     probs.push_back(p);
-    total += p;
   }
-  if (total > 0.0) {
-    for (double& p : probs) {
-      p /= total;
-    }
-  }
+  num::clip_and_normalize_nonnegative(probs);
   return probs;
 }
 
-double Subnetwork::conditional_exit_time(const OccupationMoments& m,
+double Subnetwork::conditional_exit_time(const OccupationIntegrals& integrals,
                                          num::idx exit_state_idx,
                                          num::idx col) const {
-  double u = m.first(exit_state_idx, col);
+  // Divide the first time moment by the exit state's occupation.
+  double u = integrals.occupation(exit_state_idx, col);
   if (!(u > 0.0)) {
     return 0.0;
   }
-  return std::max(0.0, m.second(exit_state_idx, col)) / u;
+  return std::max(0.0, integrals.time_weighted_occupation(exit_state_idx, col)) / u;
 }
 
 std::vector<double> Subnetwork::expected_entries(const num::Vector& occupancy,
@@ -351,6 +203,7 @@ std::vector<double> Subnetwork::expected_entries(const num::Vector& occupancy,
 }
 
 std::vector<double> Subnetwork::cut_time_losses(const num::Vector& occupancy) const {
+  // Estimate the occupation time lost by removing each state.
   const num::idx n = size();
   num::Vector ones(n, 1.0);
   num::Vector z_col_sums(n, 0.0); // Z^T 1

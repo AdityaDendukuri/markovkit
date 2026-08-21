@@ -28,16 +28,18 @@ std::vector<std::vector<double>> json_matrix(const boost::json::value& value) {
 } // namespace
 
 int main() {
+  // Load the graph Laplacian, stationary weights, and committors.
   const auto document = num::io::read_json("laplacians/cs-medium.json");
   const auto& data = document.as_object();
   const auto laplacian = num::io::sparse_matrix(data.at("L"));
   const auto h = json_vector<double>(data.at("h"));
   const auto committors = json_matrix(data.at("C"));
-  const else_sim::ReversibleLaplacian generator(laplacian, h);
+  const cme::ReversibleLaplacian generator(laplacian, h);
 
   constexpr std::size_t count = 5;
   constexpr std::size_t samples = 20;
   std::array<num::idx, count> starts{};
+  // Start each ensemble at its dominant committor state.
   for (std::size_t observable = 0; observable < count; ++observable) {
     for (num::idx state = 1; state < laplacian.n_rows(); ++state) {
       if (committors[state][observable] > committors[starts[observable]][observable]) {
@@ -47,6 +49,7 @@ int main() {
   }
 
   std::vector<double> times;
+  // Observe each path on a logarithmic time grid.
   for (double exponent : num::linspace(-12.0, -4.0, 41)) {
     times.push_back(std::pow(10.0, exponent));
   }
@@ -58,15 +61,17 @@ int main() {
     }
 
     for (std::size_t sample = 0; sample < samples; ++sample) {
-      const auto path = else_sim::laplacian_else_trajectory(
-          generator,
-          starts[panel],
-          0.0,
-          times.back(),
-          {.capacity = 60},
-          static_cast<int>((1000 * panel) + sample));
+      // Sample one trajectory through local Laplacian restrictions.
+      const auto path =
+          else_sim::laplacian_else_trajectory(generator,
+                                              starts[panel],
+                                              0.0,
+                                              times.back(),
+                                              {.capacity = 60},
+                                              static_cast<int>((1000 * panel) + sample));
 
       std::size_t state_index = 0;
+      // Accumulate committors at the requested observation times.
       for (std::size_t time_index = 0; time_index < times.size(); ++time_index) {
         while (state_index + 1 < path.times.size() &&
                path.times[state_index + 1] <= times[time_index]) {
@@ -81,6 +86,7 @@ int main() {
     }
   }
 
+  // Each panel shows ensemble-averaged committors from one basin.
   num::plt::subplot(2, 3);
   for (std::size_t panel = 0; panel < count; ++panel) {
     for (std::size_t observable = 0; observable < count; ++observable) {

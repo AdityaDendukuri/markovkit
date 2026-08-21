@@ -10,15 +10,15 @@ void test_state_space_expand_compress() {
       [](const markovkit::State&, const std::vector<double>& r, double) { return r[0]; },
       [](const markovkit::State& x, const std::vector<double>& r, double) { return r[1] * x[0]; }};
 
-  fsp::StateSpace sp;
+  cme::StateSpace sp;
   sp.add_state({0}, 1.0);
   assert(sp.size() == 1);
 
-  sp.expand(model, fsp::rect_boundary(10), 2);
+  sp.expand(model, cme::rect_boundary(10), 2);
   assert(sp.size() == 3); // 0, 1, 2
 
   std::vector<double> rates = {5.0, 0.1};
-  auto generator = fsp::build_generator(sp, model, rates, 0.0, false);
+  auto generator = cme::build_generator(sp, model, rates, 0.0, false);
   assert(generator.matrix.n_rows() == 3);
   assert(generator.diagonal_rates[0] == 5.0);
 
@@ -43,7 +43,7 @@ void test_adaptive_fsp_birth_death() {
   prob.t0 = 0.0;
   prob.tf = 2.0;
   prob.rates = {5.0, 0.1};
-  prob.bc = fsp::rect_boundary(100);
+  prob.bc = cme::rect_boundary(100);
 
   fsp::AdaptiveFSPParams params;
   params.eps_dt = 0.1;

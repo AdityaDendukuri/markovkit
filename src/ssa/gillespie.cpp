@@ -24,6 +24,7 @@ markovkit::Trajectory gillespie(const markovkit::ReactionSystem& model,
   double t = t0;
   std::vector<double> prop(model.size(), 0.0);
 
+  // Recompute propensities after every reaction event.
   while (t < tf && path.reactions.size() < maximum_steps) {
     double total = 0.0;
     for (std::size_t r = 0; r < model.size(); ++r) {
@@ -41,17 +42,9 @@ markovkit::Trajectory gillespie(const markovkit::ReactionSystem& model,
     }
     t += dt;
 
-    double target = uniform(rng) * total;
-    double csum = 0.0;
-    std::size_t fired = model.size() - 1;
-    for (std::size_t r = 0; r < model.size(); ++r) {
-      csum += prop[r];
-      if (target <= csum) {
-        fired = r;
-        break;
-      }
-    }
+    const std::size_t fired = num::sample_categorical(prop, rng);
 
+    // Apply the selected stoichiometric change.
     current = current + model.changes[fired];
     path.times.push_back(t);
     path.states.push_back(current);
@@ -59,6 +52,7 @@ markovkit::Trajectory gillespie(const markovkit::ReactionSystem& model,
   }
 
   if (path.reactions.size() < maximum_steps) {
+    // Extend an absorbed path to the requested horizon.
     path.times.push_back(tf);
     path.states.push_back(current);
   }

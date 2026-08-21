@@ -14,6 +14,7 @@ constexpr std::array<const char*, 3> colors = {"#2980b9", "#c0392b", "#27ae60"};
 } // namespace
 
 int main() {
+  // These scales reproduce the stochastic Oregonator regime.
   const double y1 = 500.0;
   const double y2 = 1000.0;
   const double y3 = 2000.0;
@@ -27,6 +28,7 @@ int main() {
       (mu1 + mu2) / y3,
   };
 
+  // Five reactions couple the three oscillator species.
   markovkit::ReactionSystem model{
       .changes = {{1, -1, 0}, {-1, -1, 0}, {1, 0, 1}, {-2, 0, 0}, {0, 1, -1}},
       .propensities = {
@@ -40,23 +42,36 @@ int main() {
       }};
 
   const markovkit::State initial{500, 1000, 2000};
-  const auto one_else = else_sim::else_ensemble(model, rates, initial, 1, 0.0, final_time,
-                                                 {.capacity = subnetwork_capacity,
-                                                  .maximum_steps = simulation_steps},
-                                                 42);
+  // Compare matched ELSE and SSA trajectory ensembles.
+  const auto one_else =
+      else_sim::else_ensemble(model,
+                              rates,
+                              initial,
+                              1,
+                              0.0,
+                              final_time,
+                              {.capacity = subnetwork_capacity, .maximum_steps = simulation_steps},
+                              42);
   const std::vector<markovkit::Trajectory> one_ssa{
       ssa::gillespie(model, rates, initial, 0.0, final_time, 42, simulation_steps)};
-  const auto many_else = else_sim::else_ensemble(model, rates, initial, 20, 0.0, final_time,
-                                                  {.capacity = subnetwork_capacity,
-                                                   .maximum_steps = simulation_steps},
-                                                  42);
+  const auto many_else =
+      else_sim::else_ensemble(model,
+                              rates,
+                              initial,
+                              20,
+                              0.0,
+                              final_time,
+                              {.capacity = subnetwork_capacity, .maximum_steps = simulation_steps},
+                              42);
   std::vector<markovkit::Trajectory> many_ssa;
   many_ssa.reserve(20);
+  // Use matching seed ranges for the SSA ensemble.
   for (int seed = 42; seed < 62; ++seed) {
     many_ssa.push_back(
         ssa::gillespie(model, rates, initial, 0.0, final_time, seed, simulation_steps));
   }
 
+  // Plot single paths above their ensemble counterparts.
   num::plt::subplot(2, 2);
   num::plt::plot_paths(one_else, labels, colors, "ELSE: 1 trajectory");
   num::plt::next();

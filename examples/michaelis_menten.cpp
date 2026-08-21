@@ -4,6 +4,7 @@
 #include <vector>
 
 int main() {
+  // Substrate and enzyme bind, unbind, and form product.
   const markovkit::ReactionSystem model{
       .changes = {{-1, -1, 1, 0}, {1, 1, -1, 0}, {0, 1, -1, 1}},
       .propensities = {
@@ -17,6 +18,7 @@ int main() {
   const markovkit::State initial{50, 10, 0, 0};
   constexpr double time = 10.0;
 
+  // Both solvers start from the same point mass and horizon.
   const fsp::FSPProblem problem{
       .model = model,
       .u0 = initial,
@@ -28,6 +30,7 @@ int main() {
   auto [fsp_solution, diagnostics] =
       fsp::solve_adaptive_fsp(problem, {.eps_dt = 0.1, .flux_tolerance = 1e-10});
 
+  // Solve the same terminal density through ELSE subnetworks.
   auto subnetworks = else_sim::density_subnetworks(
       model, rates, initial, 30, {.capacity = 60, .expansion_depth = 0});
   const auto else_solution =
@@ -35,6 +38,7 @@ int main() {
 
   std::array<std::map<int, double>, 4> fsp_marginals;
   std::array<std::map<int, double>, 4> else_marginals;
+  // Form comparable single-species marginals.
   for (std::size_t species = 0; species < 4; ++species) {
     fsp_marginals[species] = fsp_solution.marginal(fsp_solution.n_snapshots() - 1, species);
   }
@@ -45,6 +49,7 @@ int main() {
     }
   }
 
+  // Plot matching FSP and ELSE marginals for every species.
   const std::array names{"S", "E", "C", "P"};
   num::plt::subplot(2, 2);
   for (std::size_t species = 0; species < 4; ++species) {

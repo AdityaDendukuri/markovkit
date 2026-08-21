@@ -29,6 +29,7 @@ std::vector<std::vector<double>> json_matrix(const boost::json::value& value) {
 } // namespace
 
 int main() {
+  // Load the graph Laplacian, stationary weights, and committors.
   const auto document = num::io::read_json("laplacians/cs-medium.json");
   const auto& data = document.as_object();
   const auto laplacian = num::io::sparse_matrix(data.at("L"));
@@ -37,6 +38,7 @@ int main() {
 
   constexpr std::size_t count = 5;
   std::array<num::idx, count> starts{};
+  // Start each panel at its dominant committor state.
   for (std::size_t observable = 0; observable < count; ++observable) {
     for (num::idx state = 1; state < laplacian.n_rows(); ++state) {
       if (committors[state][observable] > committors[starts[observable]][observable]) {
@@ -46,18 +48,21 @@ int main() {
   }
 
   std::vector<double> times;
+  // Resolve the fast graph dynamics on a logarithmic time grid.
   for (double exponent : num::linspace(-12.0, -4.0, 41)) {
     times.push_back(std::pow(10.0, exponent));
   }
 
   std::array<std::array<std::vector<double>, count>, count> curves;
   for (std::size_t panel = 0; panel < count; ++panel) {
+    // Propagate a local density over logarithmic time points.
     auto subnetworks = else_sim::laplacian_restrictions(laplacian, h, starts[panel], 500, 2);
     else_sim::TalbotDensitySolver density(std::move(subnetworks));
 
     for (double time : times) {
       const auto solution =
           density.solve(markovkit::State{static_cast<int>(starts[panel])}, time, 14);
+      // Project the density onto each committor.
       for (std::size_t observable = 0; observable < count; ++observable) {
         double mean = 0.0;
         for (num::idx index = 0; index < solution.probability.size(); ++index) {
@@ -69,13 +74,12 @@ int main() {
     }
   }
 
+  // Each panel compares all committors from one starting basin.
   num::plt::subplot(2, 3);
   for (std::size_t panel = 0; panel < count; ++panel) {
     for (std::size_t observable = 0; observable < count; ++observable) {
-      num::plt::plot(times,
-                     curves[panel][observable],
-                     "C" + std::to_string(observable + 1),
-                     "lines lw 2");
+      num::plt::plot(
+          times, curves[panel][observable], "C" + std::to_string(observable + 1), "lines lw 2");
     }
     num::plt::title("start = argmax(C" + std::to_string(panel + 1) + ")");
     num::plt::xlabel("t");

@@ -1,12 +1,13 @@
-#include "fsp/state_space.hpp"
+#include "cme/state_space.hpp"
 #include <algorithm>
 #include <cmath>
 #include <numeric>
 #include <random>
 
-namespace fsp {
+namespace cme {
 
 void StateSpace::add_state(const markovkit::State& x, double prob) {
+  // Keep state storage and lookup indices synchronized.
   if (index.count(x)) {
     return;
   }
@@ -40,9 +41,7 @@ void StateSpace::remove_states(const std::vector<bool>& remove_mask) {
   }
 }
 
-void StateSpace::expand(const markovkit::ReactionSystem& model,
-                        const BoundaryCondition& bc,
-                        int depth) {
+void StateSpace::expand(const ReactionSystem& model, const BoundaryCondition& bc, int depth) {
   for (int d = 0; d < depth; ++d) {
     // Only expand states present at the start of this shell.
     int n_before = static_cast<int>(states.size());
@@ -58,13 +57,13 @@ void StateSpace::expand(const markovkit::ReactionSystem& model,
   }
 }
 
-void StateSpace::expand_ssa(const markovkit::ReactionSystem& model,
+void StateSpace::expand_ssa(const ReactionSystem& model,
                             const std::vector<double>& rates,
                             double t,
                             const BoundaryCondition& bc,
                             int depth,
                             std::mt19937& rng) {
-  std::uniform_real_distribution<double> uniform(0.0, 1.0);
+  // Sample one likely successor per state and shell.
   int nk = static_cast<int>(model.size());
   std::vector<double> props(nk);
   for (int d = 0; d < depth; ++d) {
@@ -81,19 +80,7 @@ void StateSpace::expand_ssa(const markovkit::ReactionSystem& model,
         continue;
       }
 
-      double threshold = uniform(rng) * total;
-      double csum = 0.0;
-      int chosen = -1;
-      for (int k = 0; k < nk; ++k) {
-        csum += props[k];
-        if (threshold <= csum) {
-          chosen = k;
-          break;
-        }
-      }
-      if (chosen < 0) {
-        continue;
-      }
+      const auto chosen = static_cast<int>(num::sample_categorical(props, rng));
 
       markovkit::State y = x + model.changes[chosen];
       if (!index.count(y) && bc(y)) {
@@ -103,7 +90,7 @@ void StateSpace::expand_ssa(const markovkit::ReactionSystem& model,
   }
 }
 
-std::pair<double, int> StateSpace::compress(const markovkit::ReactionSystem& model,
+std::pair<double, int> StateSpace::compress(const ReactionSystem& model,
                                             const std::vector<double>& rates,
                                             double t,
                                             double prob_quantile,
@@ -117,6 +104,7 @@ std::pair<double, int> StateSpace::compress(const markovkit::ReactionSystem& mod
   std::vector<double> local_rates;
   const std::vector<double>* exit_rates_ptr = precomputed_exit_rates;
   if (!exit_rates_ptr) {
+    // Compute activity locally when the generator did not provide it.
     local_rates.resize(n, 0.0);
     int nk = static_cast<int>(model.size());
     for (int i = 0; i < n; ++i) {
@@ -131,6 +119,7 @@ std::pair<double, int> StateSpace::compress(const markovkit::ReactionSystem& mod
   }
 
   std::vector<double> flux(n, 0.0);
+  // Estimate the activity carried by each state.
   double total_flux = 0.0;
   for (int i = 0; i < n; ++i) {
     flux[i] = probs[i] * (*exit_rates_ptr)[i];
@@ -142,19 +131,14 @@ std::pair<double, int> StateSpace::compress(const markovkit::ReactionSystem& mod
     return {total_flux, 0};
   }
 
-  std::vector<int> candidate_idx(n);
-  std::iota(candidate_idx.begin(), candidate_idx.end(), 0);
-  std::nth_element(candidate_idx.begin(),
-                   candidate_idx.begin() + n_candidates,
-                   candidate_idx.end(),
-                   [this](int a, int b) { return probs[a] < probs[b]; });
+  const auto candidate_idx = num::smallest_indices(std::span<const double>(probs), n_candidates);
 
   // Probability selects candidates; flux decides whether removal is safe.
   double threshold = flux_tolerance * total_flux;
   std::vector<bool> remove_mask(n, false);
   int n_removed = 0;
   for (int i = 0; i < n_candidates; ++i) {
-    int idx = candidate_idx[i];
+    const int idx = static_cast<int>(candidate_idx[i]);
     if (flux[idx] < threshold) {
       remove_mask[idx] = true;
       ++n_removed;
@@ -168,17 +152,8 @@ std::pair<double, int> StateSpace::compress(const markovkit::ReactionSystem& mod
 }
 
 double StateSpace::renormalize() {
-  double total = 0.0;
-  for (double p : probs) {
-    total += p;
-  }
-  if (total > 0.0) {
-    double inv = 1.0 / total;
-    for (double& p : probs) {
-      p *= inv;
-    }
-  }
-  return total;
+  // Clip propagation roundoff before restoring unit mass.
+  return num::clip_and_normalize_nonnegative(probs);
 }
 
-} // namespace fsp
+} // namespace cme

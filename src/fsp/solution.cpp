@@ -3,12 +3,14 @@
 namespace fsp {
 
 std::vector<std::vector<double>> FSPSolution::mean_trajectory() const {
+  // Collapse each snapshot to species means.
   std::vector<std::vector<double>> result;
   result.reserve(snapshots.size());
 
   for (const auto& snap : snapshots) {
     std::vector<double> means(n_species, 0.0);
     for (std::size_t i = 0; i < snap.states.size(); ++i) {
+      // Weight each state count by its probability.
       for (int s = 0; s < n_species; ++s) {
         means[s] += snap.probs[i] * snap.states[i][s];
       }
@@ -19,6 +21,7 @@ std::vector<std::vector<double>> FSPSolution::mean_trajectory() const {
 }
 
 std::map<int, double> FSPSolution::marginal(int snapshot_idx, int species) const {
+  // Aggregate joint-state mass by one species count.
   std::map<int, double> marg;
   const auto& snap = snapshots.at(snapshot_idx);
   for (std::size_t i = 0; i < snap.states.size(); ++i) {

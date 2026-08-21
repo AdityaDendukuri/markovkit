@@ -12,35 +12,14 @@ markovkit::State graph_state(num::idx state) {
   return markovkit::State{static_cast<int>(state)};
 }
 
-void validate_laplacian(const num::SparseMatrix& laplacian,
-                        const std::vector<double>& stationary_sqrt) {
-  if (laplacian.n_rows() != laplacian.n_cols()) {
-    throw std::invalid_argument("Laplacian must be square");
-  }
-  if (stationary_sqrt.size() != laplacian.n_rows()) {
-    throw std::invalid_argument("stationary weights must match the Laplacian size");
-  }
-  if (!std::all_of(stationary_sqrt.begin(), stationary_sqrt.end(), [](double value) {
-        return value > 0.0;
-      })) {
-    throw std::invalid_argument("stationary weights must be positive");
-  }
-}
-
 } // namespace
-
-ReversibleLaplacian::ReversibleLaplacian(
-    const num::SparseMatrix& laplacian,
-    const std::vector<double>& stationary_sqrt)
-    : laplacian_(&laplacian), stationary_sqrt_(&stationary_sqrt) {
-  validate_laplacian(laplacian, stationary_sqrt);
-}
 
 std::vector<num::idx> laplacian_neighborhood(const num::SparseMatrix& laplacian,
                                              const std::vector<double>& stationary_sqrt,
                                              num::idx initial,
                                              num::idx capacity) {
-  validate_laplacian(laplacian, stationary_sqrt);
+  const cme::ReversibleLaplacian validated(laplacian, stationary_sqrt);
+  (void)validated;
   if (initial >= laplacian.n_rows() || capacity == 0 || capacity > laplacian.n_rows()) {
     throw std::invalid_argument("invalid Laplacian neighborhood request");
   }
@@ -63,6 +42,7 @@ std::vector<num::idx> laplacian_neighborhood(const num::SparseMatrix& laplacian,
   };
 
   expose(initial);
+  // Grow the connected region from the highest-weight frontier state.
   while (states.size() < capacity) {
     if (frontier.empty()) {
       throw std::invalid_argument("initial component is smaller than the requested capacity");
@@ -79,80 +59,7 @@ std::vector<num::idx> laplacian_neighborhood(const num::SparseMatrix& laplacian,
   return states;
 }
 
-// Column generator: R = -diag(h) * L * diag(h)^-1, i.e. R_ij = -L_ij * (h_i / h_j)
-// Satisfies 1^T R = 0 (column sums zero) and R_ij >= 0 (i != j)
-RestrictedGenerator restrict_laplacian(const num::SparseMatrix& laplacian,
-                                       const std::vector<double>& stationary_sqrt,
-                                       const std::vector<num::idx>& states) {
-  validate_laplacian(laplacian, stationary_sqrt);
-  if (states.empty()) {
-    throw std::invalid_argument("a Laplacian density subnetwork requires states");
-  }
-
-  RestrictedGenerator subnetwork;
-  subnetwork.states.reserve(states.size());
-  for (num::idx state : states) {
-    if (state >= laplacian.n_rows()) {
-      throw std::out_of_range("Laplacian state is out of range");
-    }
-    const auto id = graph_state(state);
-    if (subnetwork.index.count(id)) {
-      throw std::invalid_argument("Laplacian density states must be unique");
-    }
-    subnetwork.index[id] = static_cast<int>(subnetwork.states.size());
-    subnetwork.states.push_back(id);
-  }
-
-  std::vector<num::idx> rows;
-  std::vector<num::idx> columns;
-  std::vector<double> values;
-
-  for (num::idx local_column = 0; local_column < states.size(); ++local_column) {
-    const num::idx global_column = states[local_column];
-    bool diagonal_found = false;
-    for (num::idx k = laplacian.row_ptr()[global_column];
-         k < laplacian.row_ptr()[global_column + 1];
-         ++k) {
-      const num::idx global_row = laplacian.col_idx()[k];
-      if (global_row == global_column) {
-        // Keep the full diagonal so omitted off-diagonal rates remain exit rates.
-        rows.push_back(local_column);
-        columns.push_back(local_column);
-        values.push_back(-laplacian.values()[k]);
-        diagonal_found = true;
-        continue;
-      }
-
-      const double rate =
-          -laplacian.values()[k] * stationary_sqrt[global_row] / stationary_sqrt[global_column];
-      if (rate < 0.0) {
-        throw std::invalid_argument("Laplacian has a positive off-diagonal entry");
-      }
-      if (rate == 0.0) {
-        continue;
-      }
-
-      const auto local = subnetwork.index.find(graph_state(global_row));
-      if (local != subnetwork.index.end()) {
-        rows.push_back(static_cast<num::idx>(local->second));
-        columns.push_back(local_column);
-        values.push_back(rate);
-      } else {
-        subnetwork.boundary.push_back({local_column, graph_state(global_row), rate});
-      }
-    }
-    if (!diagonal_found) {
-      throw std::invalid_argument("Laplacian requires an explicit diagonal");
-    }
-  }
-
-  subnetwork.generator =
-      num::SparseMatrix::from_triplets(states.size(), states.size(), rows, columns, values);
-  subnetwork.symmetric_pattern = true;
-  return subnetwork;
-}
-
-std::vector<RestrictedGenerator>
+std::vector<cme::RestrictedGenerator>
 laplacian_restrictions(const num::SparseMatrix& laplacian,
                        const std::vector<double>& stationary_sqrt,
                        num::idx initial,
@@ -168,10 +75,11 @@ laplacian_restrictions(const num::SparseMatrix& laplacian,
     included[state] = true;
   }
 
-  std::vector<RestrictedGenerator> subnetworks;
+  std::vector<cme::RestrictedGenerator> subnetworks;
   subnetworks.reserve(static_cast<std::size_t>(count));
+  // Expand each restriction with the previous boundary states.
   for (int number = 0; number < count; ++number) {
-    subnetworks.push_back(restrict_laplacian(laplacian, stationary_sqrt, states));
+    subnetworks.push_back(cme::restrict_laplacian(laplacian, stationary_sqrt, states));
     if (subnetworks.back().boundary.empty()) {
       break;
     }
@@ -187,12 +95,12 @@ laplacian_restrictions(const num::SparseMatrix& laplacian,
   return subnetworks;
 }
 
-markovkit::Trajectory laplacian_else_trajectory(const ReversibleLaplacian& generator,
-                                                 num::idx initial,
-                                                 double initial_time,
-                                                 double final_time,
-                                                 ELSEOptions options,
-                                                 int seed) {
+markovkit::Trajectory laplacian_else_trajectory(const cme::ReversibleLaplacian& generator,
+                                                num::idx initial,
+                                                double initial_time,
+                                                double final_time,
+                                                ELSEOptions options,
+                                                int seed) {
   const auto& laplacian = generator.matrix();
   const auto& stationary_sqrt = generator.stationary_sqrt();
   if (initial >= laplacian.n_rows() || initial_time > final_time || options.capacity == 0 ||
@@ -208,32 +116,34 @@ markovkit::Trajectory laplacian_else_trajectory(const ReversibleLaplacian& gener
   num::idx current = initial;
   double time = initial_time;
   std::size_t completed_steps = 0;
+  // Replace each local excursion with one sampled exit event.
   for (; completed_steps < options.maximum_steps && time < final_time; ++completed_steps) {
     const auto states =
         laplacian_neighborhood(laplacian, stationary_sqrt, current, options.capacity);
-    auto assembled = restrict_laplacian(laplacian, stationary_sqrt, states);
+    auto assembled = cme::restrict_laplacian(laplacian, stationary_sqrt, states);
     std::vector<double> local_h;
     local_h.reserve(states.size());
     for (num::idx state : states) {
       local_h.push_back(stationary_sqrt[state]);
     }
 
-    Subnetwork subnetwork(reversible_generator(std::move(assembled), local_h));
+    Subnetwork subnetwork(cme::reversible_generator(std::move(assembled), local_h));
     if (subnetwork.boundary_states().empty()) {
       break;
     }
 
     num::Matrix source(subnetwork.size(), 1, 0.0);
     source(static_cast<num::idx>(subnetwork.find(graph_state(current))), 0) = 1.0;
-    const auto moments = subnetwork.occupation_moments(source);
-    const auto exit_probabilities = subnetwork.exit_probabilities(moments);
-    std::discrete_distribution<std::size_t> choose_exit(
-        exit_probabilities.begin(), exit_probabilities.end());
-    const num::idx local_exit = subnetwork.boundary_states()[choose_exit(random)];
-    const double waiting_time = subnetwork.conditional_exit_time(moments, local_exit);
+    const auto integrals = subnetwork.occupation_integrals(source);
+    const auto exit_probabilities = subnetwork.exit_probabilities(integrals);
+    // Sample the local state through which the path exits.
+    const num::idx local_exit =
+        subnetwork.boundary_states()[num::sample_categorical(exit_probabilities, random)];
+    const double waiting_time = subnetwork.conditional_exit_time(integrals, local_exit);
 
     std::vector<num::idx> destinations;
     std::vector<double> rates;
+    // Resolve the chosen boundary state to its external destinations.
     for (const auto& transition : subnetwork.boundary()) {
       if (transition.source == local_exit) {
         destinations.push_back(static_cast<num::idx>(transition.destination[0]));
@@ -244,15 +154,15 @@ markovkit::Trajectory laplacian_else_trajectory(const ReversibleLaplacian& gener
       break;
     }
 
-    std::discrete_distribution<std::size_t> choose_destination(rates.begin(), rates.end());
     time += waiting_time;
-    current = destinations[choose_destination(random)];
+    current = destinations[num::sample_categorical(rates, random)];
     trajectory.times.push_back(time);
     trajectory.states.push_back(graph_state(current));
   }
 
   if (completed_steps < options.maximum_steps && time < final_time &&
       final_time < std::numeric_limits<double>::infinity()) {
+    // Extend a completed path to the finite observation horizon.
     trajectory.times.push_back(final_time);
     trajectory.states.push_back(graph_state(current));
   }

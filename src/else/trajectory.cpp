@@ -1,4 +1,4 @@
-#include "else/else_solver.hpp"
+#include "else/trajectory.hpp"
 #include <algorithm>
 #include <map>
 #include <numeric>
@@ -12,11 +12,12 @@ namespace {
 
 using StateWeights = std::map<markovkit::State, double>;
 
-void expand_from_entrances(fsp::StateSpace& workspace,
+void expand_from_entrances(cme::StateSpace& workspace,
                            const StateWeights& entrances,
                            const markovkit::ReactionSystem& model,
                            const std::vector<double>& rates,
                            const ELSEOptions& options) {
+  // Seed the expansion frontier with the current entrance distribution.
   std::vector<markovkit::State> frontier;
   std::set<markovkit::State> visited;
   for (const auto& [state, weight] : entrances) {
@@ -25,7 +26,7 @@ void expand_from_entrances(fsp::StateSpace& workspace,
     visited.insert(state);
   }
 
-  const auto boundary = fsp::nonnegative_boundary();
+  const auto boundary = cme::nonnegative_boundary();
   for (int depth = 0; depth < options.expansion_depth; ++depth) {
     std::vector<markovkit::State> next;
     for (const auto& state : frontier) {
@@ -38,6 +39,7 @@ void expand_from_entrances(fsp::StateSpace& workspace,
         for (const auto& propensity : model.propensities) {
           total_rate += std::max(0.0, propensity(destination, rates, 0.0));
         }
+        // Ignore destinations with no meaningful outgoing activity.
         if (total_rate <= options.tolerance) {
           continue;
         }
@@ -58,10 +60,10 @@ void validate(const ELSEOptions& options) {
 
 struct ExitChoice {
   std::vector<markovkit::State> destinations;
-  std::discrete_distribution<std::size_t> distribution;
+  std::vector<double> rates;
 };
 
-void prune(fsp::StateSpace& states,
+void prune(cme::StateSpace& states,
            const Subnetwork& subnetwork,
            const num::Vector& entrance,
            const StateWeights& protected_states,
@@ -76,40 +78,42 @@ void prune(fsp::StateSpace& states,
   const auto occupation = subnetwork.occupation(entrance);
   const auto visits = subnetwork.expected_entries(occupation, entrance);
   // Entrance states are protected; rank all others by expected visits.
-  std::vector<std::pair<double, int>> candidates;
+  std::vector<int> candidate_states;
+  std::vector<double> candidate_visits;
   for (int index = 0; index < states.size(); ++index) {
     if (!protected_states.contains(states.states[index])) {
-      candidates.emplace_back(visits[static_cast<num::idx>(index)], index);
+      candidate_states.push_back(index);
+      candidate_visits.push_back(visits[static_cast<num::idx>(index)]);
     }
   }
-  std::sort(candidates.begin(), candidates.end());
 
   const auto remove_count = static_cast<std::size_t>(states.size() - static_cast<int>(capacity));
   std::vector<bool> remove(static_cast<std::size_t>(states.size()), false);
-  for (std::size_t index = 0; index < std::min(remove_count, candidates.size()); ++index) {
-    remove[static_cast<std::size_t>(candidates[index].second)] = true;
+  // Remove the least-visited unprotected states first.
+  for (num::idx candidate :
+       num::smallest_indices(std::span<const double>(candidate_visits), remove_count)) {
+    remove[static_cast<std::size_t>(candidate_states[candidate])] = true;
   }
   states.remove_states(remove);
 }
 
-Subnetwork prepare_subnetwork(fsp::StateSpace& workspace,
+Subnetwork prepare_subnetwork(cme::StateSpace& workspace,
                               const StateWeights& entrances,
                               const markovkit::ReactionSystem& model,
                               const std::vector<double>& rates,
                               const ELSEOptions& options) {
-  // The workspace persists between ELSE steps, while entrances must always survive pruning.
-  // Persistent ELSE grows only reaction shells around the current entrances.
+  // Grow reaction shells around protected entrances.
   expand_from_entrances(workspace, entrances, model, rates, options);
 
   if (workspace.size() > static_cast<int>(options.capacity)) {
-    Subnetwork expanded(restrict_cme(workspace, model, rates));
+    Subnetwork expanded(cme::restrict_cme(workspace, model, rates));
     num::Vector entrance(workspace.size(), 0.0);
     for (const auto& [state, weight] : entrances) {
       entrance[static_cast<num::idx>(workspace.find(state))] = weight;
     }
     prune(workspace, expanded, entrance, entrances, options.capacity);
   }
-  return Subnetwork(restrict_cme(workspace, model, rates));
+  return Subnetwork(cme::restrict_cme(workspace, model, rates));
 }
 
 void finish(markovkit::Trajectory& trajectory, double& current_time, double final_time) {
@@ -122,15 +126,10 @@ void finish(markovkit::Trajectory& trajectory, double& current_time, double fina
 
 std::vector<ExitChoice> boundary_choices(const Subnetwork& subnetwork) {
   std::vector<ExitChoice> choices(subnetwork.size());
-  std::vector<std::vector<double>> rates(subnetwork.size());
   for (const auto& transition : subnetwork.boundary()) {
     auto& choice = choices[transition.source];
     choice.destinations.push_back(transition.destination);
-    rates[transition.source].push_back(transition.rate);
-  }
-  for (num::idx state = 0; state < subnetwork.size(); ++state) {
-    choices[state].distribution =
-        std::discrete_distribution<std::size_t>(rates[state].begin(), rates[state].end());
+    choice.rates.push_back(transition.rate);
   }
   return choices;
 }
@@ -160,14 +159,16 @@ std::vector<markovkit::Trajectory> else_ensemble(const markovkit::ReactionSystem
   std::vector<std::size_t> steps(count, 0);
   std::vector<std::mt19937> generators;
   generators.reserve(count);
+  // Give each trajectory a reproducible independent stream.
   for (std::size_t trajectory = 0; trajectory < count; ++trajectory) {
     trajectories[trajectory].times.push_back(initial_time);
     trajectories[trajectory].states.push_back(initial);
     generators.emplace_back(seed + static_cast<int>(trajectory));
   }
 
-  fsp::StateSpace workspace;
+  cme::StateSpace workspace;
   while (true) {
+    // Group unfinished trajectories by their current entrance state.
     std::vector<std::size_t> unfinished;
     StateWeights entrances;
     for (std::size_t trajectory = 0; trajectory < count; ++trajectory) {
@@ -180,6 +181,7 @@ std::vector<markovkit::Trajectory> else_ensemble(const markovkit::ReactionSystem
       break;
     }
     for (auto& [state, weight] : entrances) {
+      // Entrance weights describe the current ensemble distribution.
       weight /= static_cast<double>(unfinished.size());
     }
 
@@ -204,23 +206,25 @@ std::vector<markovkit::Trajectory> else_ensemble(const markovkit::ReactionSystem
       right_hand_sides(static_cast<num::idx>(subnetwork.find(entrance_states[column])), column) =
           1.0;
     }
-    const auto moments = subnetwork.occupation_moments(right_hand_sides);
+    const auto integrals = subnetwork.occupation_integrals(right_hand_sides);
 
-    std::vector<std::discrete_distribution<std::size_t>> exit_distributions;
+    std::vector<num::CategoricalSampler> exit_distributions;
     exit_distributions.reserve(entrance_states.size());
+    // Cache one exit distribution for each distinct entrance.
     for (num::idx column = 0; column < entrance_states.size(); ++column) {
-      const auto weights = subnetwork.exit_probabilities(moments, column);
-      exit_distributions.emplace_back(weights.begin(), weights.end());
+      const auto weights = subnetwork.exit_probabilities(integrals, column);
+      exit_distributions.emplace_back(weights);
     }
     auto destinations = boundary_choices(subnetwork);
 
+    // Advance each trajectory with its sampled exit state and waiting time.
     for (std::size_t trajectory : unfinished) {
       const num::idx column = entrance_column[states[trajectory]];
       auto& rng = generators[trajectory];
       const auto boundary_position = exit_distributions[column](rng);
       const auto boundary_state = subnetwork.boundary_states()[boundary_position];
-      // The second occupation moment supplies the conditional mean exit time.
-      const double waiting_time = subnetwork.conditional_exit_time(moments, boundary_state, column);
+      const double waiting_time =
+          subnetwork.conditional_exit_time(integrals, boundary_state, column);
       auto& choice = destinations[boundary_state];
 
       if (!(waiting_time > 0.0) || choice.destinations.empty() ||
@@ -230,7 +234,7 @@ std::vector<markovkit::Trajectory> else_ensemble(const markovkit::ReactionSystem
       }
 
       times[trajectory] += waiting_time;
-      states[trajectory] = choice.destinations[choice.distribution(rng)];
+      states[trajectory] = choice.destinations[num::sample_categorical(choice.rates, rng)];
       trajectories[trajectory].times.push_back(times[trajectory]);
       trajectories[trajectory].states.push_back(states[trajectory]);
       ++steps[trajectory];
@@ -251,23 +255,24 @@ markovkit::Trajectory else_trajectory(const markovkit::ReactionSystem& model,
   return std::move(trajectories.front());
 }
 
-std::vector<RestrictedGenerator> density_subnetworks(const markovkit::ReactionSystem& model,
-                                                     const std::vector<double>& rates,
-                                                     const markovkit::State& initial,
-                                                     int count,
-                                                     ELSEOptions options) {
+std::vector<cme::RestrictedGenerator> density_subnetworks(const markovkit::ReactionSystem& model,
+                                                          const std::vector<double>& rates,
+                                                          const markovkit::State& initial,
+                                                          int count,
+                                                          ELSEOptions options) {
   model.validate();
   validate(options);
   if (count < 1) {
     throw std::invalid_argument("ELSE density requires at least one subnetwork");
   }
 
-  fsp::StateSpace workspace;
+  cme::StateSpace workspace;
   StateWeights density{{initial, 1.0}};
-  std::vector<RestrictedGenerator> result;
+  std::vector<cme::RestrictedGenerator> result;
   result.reserve(static_cast<std::size_t>(count));
 
   for (int number = 0; number < count; ++number) {
+    // Normalize the incoming boundary mass before building the next subnetwork.
     const double mass =
         std::accumulate(density.begin(), density.end(), 0.0, [](double total, const auto& item) {
           return total + item.second;
@@ -295,7 +300,8 @@ std::vector<RestrictedGenerator> density_subnetworks(const markovkit::ReactionSy
       }
     }
 
-    RestrictedGenerator stored;
+    cme::RestrictedGenerator stored;
+    // Store only the data needed by the density solver.
     stored.states = subnetwork.states();
     for (num::idx index = 0; index < subnetwork.size(); ++index) {
       stored.index[stored.states[index]] = static_cast<int>(index);

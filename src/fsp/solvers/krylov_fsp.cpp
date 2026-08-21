@@ -1,6 +1,6 @@
 #include "fsp/solvers/krylov_fsp.hpp"
-#include "fsp/generator.hpp"
-#include "fsp/state_space.hpp"
+#include "cme/generator.hpp"
+#include "cme/state_space.hpp"
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -11,14 +11,15 @@ std::tuple<FSPSolution, KrylovFSPDiagnostics> solve_krylov_fsp(const FSPProblem&
                                                                const KrylovFSPParams& params) {
   const markovkit::ReactionSystem& model = prob.model;
   const std::vector<double>& rates = prob.rates;
-  const BoundaryCondition& bc = prob.bc;
+  const cme::BoundaryCondition& bc = prob.bc;
   double t0 = prob.t0;
   double tf = prob.tf;
   int n_species = static_cast<int>(prob.u0.size());
 
-  StateSpace sp;
+  cme::StateSpace sp;
   sp.add_state(prob.u0, 1.0);
 
+  // Save the initial point mass as the first snapshot.
   FSPSolution sol;
   sol.n_species = n_species;
   sol.times.push_back(t0);
@@ -43,37 +44,33 @@ std::tuple<FSPSolution, KrylovFSPDiagnostics> solve_krylov_fsp(const FSPProblem&
     sp.expand(model, bc, params.r);
 
     // The absorbing diagonal turns missing probability into an error estimate.
-    auto assembled = build_generator(sp, model, rates, t, true);
+    auto assembled = cme::build_generator(sp, model, rates, t, true);
     auto& A = assembled.matrix;
     int n = sp.size();
 
     // Propagate on the current finite state space.
-    num::Vector p_in(static_cast<num::idx>(n), 0.0);
-    for (int i = 0; i < n; ++i) {
-      p_in[static_cast<num::idx>(i)] = sp.probs[i];
-    }
+    num::Vector p_in(sp.probs);
 
     num::Vector w = num::expv(tau, A, p_in, params.krylov_m, params.krylov_tol);
 
     // Accept only if retained mass satisfies the Vo--Sidje error budget.
-    double mass = 0.0;
-    for (num::idx i = 0; i < w.size(); ++i) {
-      mass += std::max(0.0, w[i]);
-    }
+    const double mass = num::kernel::array::reduce(
+        w, 0.0, [](double total, double value) { return total + std::max(0.0, value); });
 
     double required_mass = 1.0 - (params.eps * ((t + tau - t0) / (tf - t0)));
 
     if (mass < required_mass && tau > 1e-14) {
+      // Retry with a shorter interval when too much mass escapes.
       tau *= 0.5;
       ++diag.reject_count;
       continue;
     }
 
     // Commit the accepted probability vector.
+    num::Vector nonnegative = w;
+    num::kernel::array::map(nonnegative, [](double value) { return std::max(0.0, value); });
     sp.probs.resize(n);
-    for (int i = 0; i < n; ++i) {
-      sp.probs[i] = std::max(0.0, w[static_cast<num::idx>(i)]);
-    }
+    num::copy_to(nonnegative, sp.probs);
 
     // Remove a state only when both its probability and local derivative are small.
     num::Vector dp_dt(static_cast<num::idx>(n), 0.0);
@@ -104,11 +101,13 @@ std::tuple<FSPSolution, KrylovFSPDiagnostics> solve_krylov_fsp(const FSPProblem&
     }
 
     if (accepted_steps % params.save_interval == 0 || t >= tf) {
+      // Save only configured checkpoints and the final state.
       sol.times.push_back(t);
       sol.snapshots.push_back({sp.states, sp.probs});
       sol.state_space_sizes.push_back(sp.size());
     }
 
+    // Grow the next trial interval after a successful step.
     tau = std::min(tau * params.growth_factor, tf - t);
   }
 

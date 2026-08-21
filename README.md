@@ -21,6 +21,12 @@ MarkovKit uses [Numerics](../numerics) for matrices, factorizations, resolvent
 solves, Talbot inversion, JSON input, and plotting. The two repositories should
 be adjacent when building from source.
 
+Shared CME types live under `cme/`: reaction systems, finite state spaces,
+generator restrictions, and reversible representations. `fsp/`, `ssa/`, and
+`else/` contain method-specific policies and algorithms. The legacy
+`fsp/{boundary,generator,state_space}.hpp`, `markovkit/reaction_system.hpp`, and
+`else/else_solver.hpp` headers remain as forwarding compatibility headers.
+
 ## Build and test
 
 ```bash

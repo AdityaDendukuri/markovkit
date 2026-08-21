@@ -22,6 +22,7 @@ markovkit::Trajectory tau_leaping(const markovkit::ReactionSystem& model,
   double t = t0;
   std::vector<double> prop(model.size(), 0.0);
 
+  // Recompute propensities at the start of every leap.
   while (t < tf) {
     double total = 0.0;
     for (std::size_t r = 0; r < model.size(); ++r) {
@@ -34,6 +35,7 @@ markovkit::Trajectory tau_leaping(const markovkit::ReactionSystem& model,
 
     double dt = options.fixed_step > 0.0 ? options.fixed_step
                                          : std::max(options.min_step, options.epsilon / total);
+    // Shorten the last leap to end exactly at tf.
     dt = std::min(dt, tf - t);
     t += dt;
 
@@ -48,6 +50,7 @@ markovkit::Trajectory tau_leaping(const markovkit::ReactionSystem& model,
         continue;
       }
 
+      // Apply all firings while preventing negative counts.
       for (std::size_t c = 0; c < current.size(); ++c) {
         current[c] = std::max(0, current[c] + (count * model.changes[r][c]));
       }

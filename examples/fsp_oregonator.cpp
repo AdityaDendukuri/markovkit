@@ -2,6 +2,7 @@
 #include <vector>
 
 int main() {
+  // These scales reproduce the stochastic Oregonator regime.
   const double y1s = 500.0, y2s = 1000.0, y3s = 2000.0;
   const double mu1s = 2000.0, mu2s = 50000.0;
 
@@ -13,6 +14,7 @@ int main() {
       (mu1s + mu2s) / y3s,      // k5 = 26.0
   };
 
+  // Five reactions couple the three oscillator species.
   markovkit::ReactionSystem model;
   model.changes = {
       {1, -1, 0},  // R1
@@ -33,6 +35,7 @@ int main() {
       [](const markovkit::State& x, const std::vector<double>& r, double) { return r[4] * x[2]; },
   };
 
+  // The FSP starts from the deterministic reference counts.
   fsp::FSPProblem prob;
   prob.model = model;
   prob.u0 = {500, 1000, 2000};
@@ -41,6 +44,7 @@ int main() {
   prob.rates = rates;
   prob.bc = fsp::rect_boundary(50000);
 
+  // SSA-guided expansion limits growth of the active state space.
   fsp::AdaptiveFSPParams params;
   params.eps_dt = 1.0;
   params.prob_quantile = 0.1;
@@ -49,10 +53,12 @@ int main() {
   params.expand_method = fsp::ExpandMethod::ssa;
   params.save_interval = 1000;
 
+  // Evolve an adaptively sampled finite state space.
   const auto solution = std::get<0>(fsp::solve_adaptive_fsp(prob, params));
   const auto means = solution.mean_trajectory();
 
   std::vector<double> x, y, z, sizes;
+  // Extract observable curves from saved snapshots.
   for (std::size_t i = 0; i < solution.times.size(); ++i) {
     x.push_back(means[i][0]);
     y.push_back(means[i][1]);
@@ -60,6 +66,7 @@ int main() {
     sizes.push_back(solution.state_space_sizes[i]);
   }
 
+  // Plot the three means alongside active state-space size.
   num::plt::subplot(2, 2);
   num::plt::plot(solution.times, x, "X", "lines lw 2");
   num::plt::xlabel("time");
