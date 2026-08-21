@@ -18,9 +18,10 @@ void test_subnetwork_moments_and_exit_law() {
   sp.add_state({2});
 
   std::vector<double> rates = {1.0, 1.0};
-  else_sim::Subnetwork sub(sp, model, rates);
+  else_sim::Subnetwork sub(else_sim::restrict_cme(sp, model, rates));
   const std::vector<double> h{1.0, 1.0, std::sqrt(0.5)};
-  else_sim::Subnetwork reversible(sp, model, rates, else_sim::Reversible{h});
+  else_sim::Subnetwork reversible(
+      else_sim::reversible_generator(else_sim::restrict_cme(sp, model, rates), h));
 
   num::Vector start(3, 0.0);
   start[0] = 1.0;
@@ -86,7 +87,7 @@ void test_exact_cut_time_losses() {
       },
   };
 
-  else_sim::Subnetwork sub(sp, model, {});
+  else_sim::Subnetwork sub(else_sim::restrict_cme(sp, model, {}));
   num::Vector p0(2, 0.0);
   p0[0] = 1.0;
   auto u = sub.occupation(p0);
@@ -111,7 +112,7 @@ void test_laplacian_column_sum_property() {
   const auto L = num::SparseMatrix::from_triplets(2, 2, rows, cols, vals);
   const std::vector<double> h{1.0, 2.0};
 
-  auto step = else_sim::laplacian_density_subnetwork(L, h, {0, 1});
+  auto step = else_sim::restrict_laplacian(L, h, {0, 1});
   const auto& R = step.generator;
 
   assert(std::abs(R(0, 0) - (-4.0)) < 1e-12);
@@ -151,13 +152,13 @@ void test_two_step_talbot_density() {
   // Two-step chain:
   // Step 0: State {0}, generator R = [-2], exit edge to {1} with rate 2.0
   // Step 1: State {1}, generator R = [-3], exit edge to {2} with rate 3.0
-  else_sim::DensitySubnetwork step0;
+  else_sim::RestrictedGenerator step0;
   step0.states = {{0}};
   step0.index[step0.states[0]] = 0;
   step0.generator = num::SparseMatrix::from_triplets(1, 1, {0}, {0}, {-2.0});
   step0.boundary.push_back({0, {1}, 2.0});
 
-  else_sim::DensitySubnetwork step1;
+  else_sim::RestrictedGenerator step1;
   step1.states = {{1}};
   step1.index[step1.states[0]] = 0;
   step1.generator = num::SparseMatrix::from_triplets(1, 1, {0}, {0}, {-3.0});

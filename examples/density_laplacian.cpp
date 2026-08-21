@@ -52,7 +52,7 @@ int main() {
 
   std::array<std::array<std::vector<double>, count>, count> curves;
   for (std::size_t panel = 0; panel < count; ++panel) {
-    auto subnetworks = else_sim::laplacian_density_subnetworks(laplacian, h, starts[panel], 500, 2);
+    auto subnetworks = else_sim::laplacian_restrictions(laplacian, h, starts[panel], 500, 2);
     else_sim::TalbotDensitySolver density(std::move(subnetworks));
 
     for (double time : times) {

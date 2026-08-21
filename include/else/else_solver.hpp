@@ -15,15 +15,6 @@ struct ELSEOptions {
   std::size_t maximum_steps = std::numeric_limits<std::size_t>::max();
 };
 
-/// Generator and outward transitions for one density propagation stage.
-struct DensitySubnetwork {
-  std::vector<markovkit::State> states;
-  std::unordered_map<markovkit::State, int> index;
-  num::SparseMatrix generator{0, 0, {}, {}, {0}};
-  std::vector<markovkit::BoundaryTransition> boundary;
-  bool symmetric_pattern = false;
-};
-
 /// Simulate one ELSE path; equivalent to an ensemble of size one.
 markovkit::Trajectory else_trajectory(const markovkit::ReactionSystem& model,
                                       const std::vector<double>& rates,
@@ -44,10 +35,10 @@ std::vector<markovkit::Trajectory> else_ensemble(const markovkit::ReactionSystem
                                                  int seed = 42);
 
 /// Build the subnetwork chain used by deterministic density inversion.
-std::vector<DensitySubnetwork> density_subnetworks(const markovkit::ReactionSystem& model,
-                                                   const std::vector<double>& rates,
-                                                   const markovkit::State& initial,
-                                                   int count,
-                                                   ELSEOptions options = {});
+std::vector<RestrictedGenerator> density_subnetworks(const markovkit::ReactionSystem& model,
+                                                     const std::vector<double>& rates,
+                                                     const markovkit::State& initial,
+                                                     int count,
+                                                     ELSEOptions options = {});
 
 } // namespace else_sim

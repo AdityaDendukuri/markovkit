@@ -1,6 +1,7 @@
 #include "markovkit.hpp"
 #include <cmath>
 #include <numeric>
+#include <utility>
 #include <vector>
 
 int main() {
@@ -29,7 +30,9 @@ int main() {
     h[state] = h[state - 1] * std::sqrt(birth_rate / (death_rate * state));
   }
 
-  else_sim::Subnetwork subnetwork(states, model, rates, else_sim::Reversible{h});
+  auto restricted = else_sim::restrict_cme(states, model, rates);
+  auto reversible = else_sim::reversible_generator(std::move(restricted), h);
+  else_sim::Subnetwork subnetwork(std::move(reversible));
   num::Vector source(n, 0.0);
   source[0] = 1.0;
   const auto time_spent = subnetwork.occupation(source);

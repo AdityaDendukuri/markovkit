@@ -74,15 +74,15 @@ std::vector<num::idx> laplacian_neighborhood(const num::SparseMatrix& laplacian,
 
 // Column generator: R = -diag(h) * L * diag(h)^-1, i.e. R_ij = -L_ij * (h_i / h_j)
 // Satisfies 1^T R = 0 (column sums zero) and R_ij >= 0 (i != j)
-DensitySubnetwork laplacian_density_subnetwork(const num::SparseMatrix& laplacian,
-                                               const std::vector<double>& stationary_sqrt,
-                                               const std::vector<num::idx>& states) {
+RestrictedGenerator restrict_laplacian(const num::SparseMatrix& laplacian,
+                                       const std::vector<double>& stationary_sqrt,
+                                       const std::vector<num::idx>& states) {
   validate_laplacian(laplacian, stationary_sqrt);
   if (states.empty()) {
     throw std::invalid_argument("a Laplacian density subnetwork requires states");
   }
 
-  DensitySubnetwork subnetwork;
+  RestrictedGenerator subnetwork;
   subnetwork.states.reserve(states.size());
   for (num::idx state : states) {
     if (state >= laplacian.n_rows()) {
@@ -145,12 +145,12 @@ DensitySubnetwork laplacian_density_subnetwork(const num::SparseMatrix& laplacia
   return subnetwork;
 }
 
-std::vector<DensitySubnetwork>
-laplacian_density_subnetworks(const num::SparseMatrix& laplacian,
-                              const std::vector<double>& stationary_sqrt,
-                              num::idx initial,
-                              num::idx capacity,
-                              int count) {
+std::vector<RestrictedGenerator>
+laplacian_restrictions(const num::SparseMatrix& laplacian,
+                       const std::vector<double>& stationary_sqrt,
+                       num::idx initial,
+                       num::idx capacity,
+                       int count) {
   if (count < 1) {
     throw std::invalid_argument("Laplacian density requires at least one subnetwork");
   }
@@ -161,10 +161,10 @@ laplacian_density_subnetworks(const num::SparseMatrix& laplacian,
     included[state] = true;
   }
 
-  std::vector<DensitySubnetwork> subnetworks;
+  std::vector<RestrictedGenerator> subnetworks;
   subnetworks.reserve(static_cast<std::size_t>(count));
   for (int number = 0; number < count; ++number) {
-    subnetworks.push_back(laplacian_density_subnetwork(laplacian, stationary_sqrt, states));
+    subnetworks.push_back(restrict_laplacian(laplacian, stationary_sqrt, states));
     if (subnetworks.back().boundary.empty()) {
       break;
     }
@@ -204,17 +204,14 @@ markovkit::Trajectory laplacian_else_trajectory(const num::SparseMatrix& laplaci
   for (; completed_steps < options.maximum_steps && time < final_time; ++completed_steps) {
     const auto states =
         laplacian_neighborhood(laplacian, stationary_sqrt, current, options.capacity);
-    auto assembled = laplacian_density_subnetwork(laplacian, stationary_sqrt, states);
+    auto assembled = restrict_laplacian(laplacian, stationary_sqrt, states);
     std::vector<double> local_h;
     local_h.reserve(states.size());
     for (num::idx state : states) {
       local_h.push_back(stationary_sqrt[state]);
     }
 
-    Subnetwork subnetwork(std::move(assembled.states),
-                          std::move(assembled.generator),
-                          std::move(assembled.boundary),
-                          Reversible{local_h});
+    Subnetwork subnetwork(reversible_generator(std::move(assembled), local_h));
     if (subnetwork.boundary_states().empty()) {
       break;
     }

@@ -17,7 +17,7 @@ struct DensitySolution {
 /// Small shifted systems use dense LU; larger systems use sparse UMFPACK.
 class TalbotDensitySolver {
 public:
-  explicit TalbotDensitySolver(std::vector<DensitySubnetwork> subnetworks);
+  explicit TalbotDensitySolver(std::vector<RestrictedGenerator> subnetworks);
   ~TalbotDensitySolver();
   TalbotDensitySolver(TalbotDensitySolver&&) noexcept;
   TalbotDensitySolver& operator=(TalbotDensitySolver&&) noexcept;

@@ -5,14 +5,52 @@
 #include <numerics.hpp>
 #include <span>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace else_sim {
 
-/// Stationary square-root weights for a reversible CME.
-struct Reversible {
-  std::span<const double> stationary_sqrt;
+/// A Markov generator restricted to a finite set of states.
+struct RestrictedGenerator {
+  std::vector<markovkit::State> states;
+  std::unordered_map<markovkit::State, int> index;
+  num::SparseMatrix generator{0, 0, {}, {}, {0}};
+  std::vector<markovkit::BoundaryTransition> boundary;
+  bool symmetric_pattern = false;
 };
+
+class ReversibleGenerator {
+public:
+  ReversibleGenerator(ReversibleGenerator&&) noexcept = default;
+  ReversibleGenerator& operator=(ReversibleGenerator&&) noexcept = default;
+
+private:
+  ReversibleGenerator(RestrictedGenerator restricted,
+                      std::vector<double> stationary_sqrt,
+                      num::Matrix symmetric_operator)
+      : restricted_(std::move(restricted)),
+        stationary_sqrt_(std::move(stationary_sqrt)),
+        symmetric_operator_(std::move(symmetric_operator)) {}
+
+  RestrictedGenerator restricted_;
+  std::vector<double> stationary_sqrt_;
+  num::Matrix symmetric_operator_;
+
+  friend ReversibleGenerator
+  reversible_generator(RestrictedGenerator, std::span<const double>);
+  friend class Subnetwork;
+};
+
+/// Check detailed balance and attach its symmetric representation to a generator.
+[[nodiscard]] ReversibleGenerator
+reversible_generator(RestrictedGenerator restricted,
+                     std::span<const double> stationary_sqrt);
+
+/// Restrict a reaction generator to an existing finite state space.
+[[nodiscard]] RestrictedGenerator restrict_cme(const fsp::StateSpace& states,
+                                               const markovkit::ReactionSystem& model,
+                                               const std::vector<double>& rates,
+                                               double time = 0.0);
 
 /// First two occupation moments from a shared factorization of -R.
 struct OccupationMoments {
@@ -30,19 +68,8 @@ struct OccupationMoments {
 /// Restricted generator, boundary transitions, and occupation solver.
 class Subnetwork {
 public:
-  Subnetwork(const fsp::StateSpace& sp,
-             const markovkit::ReactionSystem& model,
-             const std::vector<double>& rates,
-             double t = 0.0);
-  Subnetwork(const fsp::StateSpace& sp,
-             const markovkit::ReactionSystem& model,
-             const std::vector<double>& rates,
-             Reversible reversible,
-             double t = 0.0);
-  Subnetwork(std::vector<markovkit::State> states,
-             num::SparseMatrix generator,
-             std::vector<markovkit::BoundaryTransition> boundary,
-             Reversible reversible);
+  explicit Subnetwork(RestrictedGenerator restricted);
+  explicit Subnetwork(ReversibleGenerator reversible);
   ~Subnetwork();
   Subnetwork(Subnetwork&&) noexcept;
   Subnetwork& operator=(Subnetwork&&) noexcept;
@@ -87,11 +114,7 @@ public:
   [[nodiscard]] std::vector<double> cut_time_losses(const num::Vector& occupation) const;
 
 private:
-  Subnetwork(const fsp::StateSpace& sp,
-             const markovkit::ReactionSystem& model,
-             const std::vector<double>& rates,
-             double t,
-             const Reversible* reversible);
+  void initialize(RestrictedGenerator restricted);
 
   std::vector<markovkit::State> states_;
   std::unordered_map<markovkit::State, int> index_;

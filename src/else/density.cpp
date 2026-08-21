@@ -51,7 +51,7 @@ private:
 };
 
 struct TalbotDensitySolver::Impl {
-  explicit Impl(std::vector<DensitySubnetwork> input_subnetworks)
+  explicit Impl(std::vector<RestrictedGenerator> input_subnetworks)
       : subnetworks(std::move(input_subnetworks)) {
     if (subnetworks.empty()) {
       throw std::invalid_argument("Talbot density requires at least one ELSE subnetwork");
@@ -175,14 +175,14 @@ struct TalbotDensitySolver::Impl {
     return result;
   }
 
-  std::vector<DensitySubnetwork> subnetworks;
+  std::vector<RestrictedGenerator> subnetworks;
   std::vector<markovkit::State> states;
   std::unordered_map<markovkit::State, num::idx> position;
   std::vector<ShiftedSolver> solvers;
   std::vector<std::vector<BoundaryTransfer>> transfers;
 };
 
-TalbotDensitySolver::TalbotDensitySolver(std::vector<DensitySubnetwork> subnetworks)
+TalbotDensitySolver::TalbotDensitySolver(std::vector<RestrictedGenerator> subnetworks)
     : impl_(std::make_unique<Impl>(std::move(subnetworks))) {}
 
 TalbotDensitySolver::~TalbotDensitySolver() = default;

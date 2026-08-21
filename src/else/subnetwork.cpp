@@ -84,6 +84,27 @@ num::Matrix symmetric_operator(const num::SparseMatrix& matrix,
 
 } // namespace
 
+RestrictedGenerator restrict_cme(const fsp::StateSpace& states,
+                                 const markovkit::ReactionSystem& model,
+                                 const std::vector<double>& rates,
+                                 double time) {
+  auto assembled = fsp::build_generator(states, model, rates, time, true);
+  return {states.states,
+          states.index,
+          std::move(assembled.matrix),
+          std::move(assembled.boundary),
+          false};
+}
+
+ReversibleGenerator reversible_generator(
+    RestrictedGenerator restricted,
+    std::span<const double> stationary_sqrt) {
+  std::vector<double> weights(stationary_sqrt.begin(), stationary_sqrt.end());
+  auto symmetric = symmetric_operator(negative(restricted.generator), weights);
+  return ReversibleGenerator(
+      std::move(restricted), std::move(weights), std::move(symmetric));
+}
+
 struct Subnetwork::SolverImpl {
   explicit SolverImpl(num::SparseMatrix operator_matrix)
       : matrix(std::move(operator_matrix)) {
@@ -94,17 +115,15 @@ struct Subnetwork::SolverImpl {
     }
   }
 
-  SolverImpl(num::SparseMatrix operator_matrix, std::span<const double> stationary_sqrt)
-      : matrix(std::move(operator_matrix)),
-        weights(stationary_sqrt.begin(), stationary_sqrt.end()) {
-    auto symmetric = symmetric_operator(matrix, stationary_sqrt);
+  SolverImpl(num::Matrix symmetric, std::vector<double> stationary_sqrt)
+      : weights(std::move(stationary_sqrt)) {
     cholesky_factor = num::cholesky(num::linalg::assume_spd(std::move(symmetric)));
     if (!cholesky_factor->success) {
       throw std::invalid_argument("reversible subnetwork operator is not positive definite");
     }
   }
 
-  num::SparseMatrix matrix;
+  num::SparseMatrix matrix{0, 0, {}, {}, {0}};
   std::optional<num::LUResult> dense_factor;
   std::optional<num::CholeskyResult> cholesky_factor;
   std::unique_ptr<num::KLUFactor> sparse_factor;
@@ -211,60 +230,32 @@ struct Subnetwork::SolverImpl {
   }
 };
 
-Subnetwork::Subnetwork(const fsp::StateSpace& sp,
-                       const markovkit::ReactionSystem& model,
-                       const std::vector<double>& rates,
-                       double t)
-    : Subnetwork(sp, model, rates, t, nullptr) {}
-
-Subnetwork::Subnetwork(const fsp::StateSpace& sp,
-                       const markovkit::ReactionSystem& model,
-                       const std::vector<double>& rates,
-                       Reversible reversible,
-                       double t)
-    : Subnetwork(sp, model, rates, t, &reversible) {}
-
-Subnetwork::Subnetwork(const fsp::StateSpace& sp,
-                       const markovkit::ReactionSystem& model,
-                       const std::vector<double>& rates,
-                       double t,
-                       const Reversible* reversible)
-    : states_(sp.states),
-      index_(sp.index) {
-  const num::idx n = states_.size();
-  auto assembled = fsp::build_generator(sp, model, rates, t, true);
-  R_ = std::move(assembled.matrix);
-  exit_rates_ = std::move(assembled.boundary_rates);
-  total_rates_ = std::move(assembled.diagonal_rates);
-  boundary_ = std::move(assembled.boundary);
-  for (num::idx state = 0; state < n; ++state) {
-    if (exit_rates_[state] > 0.0) {
-      boundary_states_.push_back(state);
-    }
-  }
-
-  // Occupation uses the positive transient operator -R.
-  auto operator_matrix = negative(R_);
-  solver_ = reversible == nullptr
-                ? std::make_unique<SolverImpl>(std::move(operator_matrix))
-                : std::make_unique<SolverImpl>(std::move(operator_matrix),
-                                               reversible->stationary_sqrt);
+Subnetwork::Subnetwork(RestrictedGenerator restricted) {
+  initialize(std::move(restricted));
+  solver_ = std::make_unique<SolverImpl>(negative(R_));
 }
 
-Subnetwork::Subnetwork(std::vector<markovkit::State> states,
-                       num::SparseMatrix generator,
-                       std::vector<markovkit::BoundaryTransition> boundary,
-                       Reversible reversible)
-    : states_(std::move(states)),
-      R_(std::move(generator)),
-      total_rates_(states_.size(), 0.0),
-      exit_rates_(states_.size(), 0.0),
-      boundary_(std::move(boundary)) {
+Subnetwork::Subnetwork(ReversibleGenerator reversible) {
+  auto weights = std::move(reversible.stationary_sqrt_);
+  auto symmetric = std::move(reversible.symmetric_operator_);
+  initialize(std::move(reversible.restricted_));
+  solver_ = std::make_unique<SolverImpl>(std::move(symmetric), std::move(weights));
+}
+
+void Subnetwork::initialize(RestrictedGenerator restricted) {
+  states_ = std::move(restricted.states);
+  index_ = std::move(restricted.index);
+  R_ = std::move(restricted.generator);
+  total_rates_.assign(states_.size(), 0.0);
+  exit_rates_.assign(states_.size(), 0.0);
+  boundary_ = std::move(restricted.boundary);
   if (R_.n_rows() != states_.size() || R_.n_cols() != states_.size()) {
     throw std::invalid_argument("subnetwork generator dimensions do not match its states");
   }
   for (num::idx state = 0; state < states_.size(); ++state) {
-    index_[states_[state]] = static_cast<int>(state);
+    if (!index_.contains(states_[state])) {
+      index_[states_[state]] = static_cast<int>(state);
+    }
     total_rates_[state] = -R_(state, state);
   }
   for (const auto& transition : boundary_) {
@@ -278,7 +269,6 @@ Subnetwork::Subnetwork(std::vector<markovkit::State> states,
       boundary_states_.push_back(state);
     }
   }
-  solver_ = std::make_unique<SolverImpl>(negative(R_), reversible.stationary_sqrt);
 }
 
 Subnetwork::~Subnetwork() = default;

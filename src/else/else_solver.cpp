@@ -102,14 +102,14 @@ Subnetwork prepare_subnetwork(fsp::StateSpace& workspace,
   expand_from_entrances(workspace, entrances, model, rates, options);
 
   if (workspace.size() > static_cast<int>(options.capacity)) {
-    Subnetwork expanded(workspace, model, rates);
+    Subnetwork expanded(restrict_cme(workspace, model, rates));
     num::Vector entrance(workspace.size(), 0.0);
     for (const auto& [state, weight] : entrances) {
       entrance[static_cast<num::idx>(workspace.find(state))] = weight;
     }
     prune(workspace, expanded, entrance, entrances, options.capacity);
   }
-  return Subnetwork(workspace, model, rates);
+  return Subnetwork(restrict_cme(workspace, model, rates));
 }
 
 void finish(markovkit::Trajectory& trajectory, double& current_time, double final_time) {
@@ -251,11 +251,11 @@ markovkit::Trajectory else_trajectory(const markovkit::ReactionSystem& model,
   return std::move(trajectories.front());
 }
 
-std::vector<DensitySubnetwork> density_subnetworks(const markovkit::ReactionSystem& model,
-                                                   const std::vector<double>& rates,
-                                                   const markovkit::State& initial,
-                                                   int count,
-                                                   ELSEOptions options) {
+std::vector<RestrictedGenerator> density_subnetworks(const markovkit::ReactionSystem& model,
+                                                     const std::vector<double>& rates,
+                                                     const markovkit::State& initial,
+                                                     int count,
+                                                     ELSEOptions options) {
   model.validate();
   validate(options);
   if (count < 1) {
@@ -264,7 +264,7 @@ std::vector<DensitySubnetwork> density_subnetworks(const markovkit::ReactionSyst
 
   fsp::StateSpace workspace;
   StateWeights density{{initial, 1.0}};
-  std::vector<DensitySubnetwork> result;
+  std::vector<RestrictedGenerator> result;
   result.reserve(static_cast<std::size_t>(count));
 
   for (int number = 0; number < count; ++number) {
@@ -295,7 +295,7 @@ std::vector<DensitySubnetwork> density_subnetworks(const markovkit::ReactionSyst
       }
     }
 
-    DensitySubnetwork stored;
+    RestrictedGenerator stored;
     stored.states = subnetwork.states();
     for (num::idx index = 0; index < subnetwork.size(); ++index) {
       stored.index[stored.states[index]] = static_cast<int>(index);

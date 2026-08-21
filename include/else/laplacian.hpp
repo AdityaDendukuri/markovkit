@@ -14,18 +14,18 @@ laplacian_neighborhood(const num::SparseMatrix& laplacian,
                        num::idx capacity);
 
 /// Convert one symmetric Laplacian restriction into a Markov generator.
-[[nodiscard]] DensitySubnetwork
-laplacian_density_subnetwork(const num::SparseMatrix& laplacian,
-                             const std::vector<double>& stationary_sqrt,
-                             const std::vector<num::idx>& states);
+[[nodiscard]] RestrictedGenerator
+restrict_laplacian(const num::SparseMatrix& laplacian,
+                   const std::vector<double>& stationary_sqrt,
+                   const std::vector<num::idx>& states);
 
 /// Build successive restrictions, retaining every previous boundary destination.
-[[nodiscard]] std::vector<DensitySubnetwork>
-laplacian_density_subnetworks(const num::SparseMatrix& laplacian,
-                              const std::vector<double>& stationary_sqrt,
-                              num::idx initial,
-                              num::idx capacity,
-                              int count);
+[[nodiscard]] std::vector<RestrictedGenerator>
+laplacian_restrictions(const num::SparseMatrix& laplacian,
+                       const std::vector<double>& stationary_sqrt,
+                       num::idx initial,
+                       num::idx capacity,
+                       int count);
 
 /// Sample a trajectory by eliminating reversible Laplacian subnetworks.
 [[nodiscard]] markovkit::Trajectory
