@@ -85,5 +85,5 @@ int main() {
     }
     num::plt::next();
   }
-  num::plt::savefig("c_lapl_evolution.png");
+  num::plt::savefig("density_laplacian.png");
 }

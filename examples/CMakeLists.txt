@@ -16,5 +16,5 @@ target_link_libraries(ssa_birth_death PRIVATE markovkit::markovkit)
 add_executable(michaelis_menten michaelis_menten.cpp)
 target_link_libraries(michaelis_menten PRIVATE markovkit::markovkit)
 
-add_executable(c_lapl c_lapl.cpp)
-target_link_libraries(c_lapl PRIVATE markovkit::markovkit)
+add_executable(density_laplacian density_laplacian.cpp)
+target_link_libraries(density_laplacian PRIVATE markovkit::markovkit)

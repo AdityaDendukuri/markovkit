@@ -1,63 +1,57 @@
 # MarkovKit
 
-C++20 library for stochastic reaction networks, finite-state projection (FSP),
-and exact linear subnetwork elimination (ELSE).
+MarkovKit is a C++20 library for continuous-time Markov chains and stochastic
+reaction networks. It provides finite-state projection (FSP), stochastic
+simulation, and exact linear subnetwork elimination (ELSE).
 
-## Structure
+## Methods
 
-- **`fsp/`**: State space management, sparse generator construction, and FSP solvers:
-  - `AdaptiveFSP`: Flux-preserving adaptive time-stepping ($\Delta t = \epsilon / \Phi$)
-  - `KrylovFSP`: Vo & Sidje (2016) mass-loss criterion
-- **`else/`**: Exact Linear Subnetwork Elimination (ELSE / FESS):
-  - `Subnetwork`: restricted generator solves, occupation moments, and exit laws
-  - `else_trajectory` and `else_ensemble`: sampled ELSE evolution
-  - `density_subnetworks` and `TalbotDensitySolver`: resolvent density evolution
-- **`ssa/`**: Exact and approximate Monte Carlo:
-  - `gillespie`: Direct exact SSA
-  - `tau_leaping`: Adaptive Poisson tau-leaping
+- **FSP**
+  - `AdaptiveFSP`: flux-controlled state-space growth
+  - `KrylovFSP`: Krylov propagation with the Vo–Sidje mass-loss criterion
+- **ELSE**
+  - `else_trajectory` and `else_ensemble`: sampled subnetwork evolution
+  - `density_subnetworks`: deterministic boundary-density propagation
+  - `TalbotDensitySolver`: density recovery from shifted resolvent solves
+- **SSA**
+  - `gillespie`: exact direct-method simulation
+  - `tau_leaping`: approximate Poisson tau-leaping
 
-## Build & Test
+MarkovKit uses [Numerics](../numerics) for matrices, factorizations, resolvent
+solves, Talbot inversion, JSON input, and plotting. The two repositories should
+be adjacent when building from source.
+
+## Build and test
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j8
 ctest --test-dir build --output-on-failure
 ```
 
 ## Examples
 
-- `fsp_oregonator`: Stiff Field-Körös-Noyes oscillator solved via Adaptive FSP
-- `fsp_toggle_switch`: Gardner bistable mutual-inhibition switch
-- `else_oregonator`: ELSE and SSA trajectory comparison for the Oregonator
-- `else_birth_death`: Subnetwork jumping trajectory for 1D birth-death process
-- `michaelis_menten`: Enzyme kinetics comparing FSP and ELSE Talbot density evolution
-- `laplacian_committor`: Committor evolution on symmetric graph Laplacians
-- `c_lapl`: Talbot/resolvent committor evolution for a Laplacian JSON file
-- `ssa_birth_death`: Gillespie SSA vs Tau-Leaping
+| Target | Demonstration | Output |
+| --- | --- | --- |
+| `fsp_oregonator` | Adaptive FSP for the Field–Körös–Noyes oscillator | `fsp_oregonator.png` |
+| `fsp_toggle_switch` | Adaptive FSP for a bistable genetic switch | `fsp_toggle_switch.png` |
+| `else_oregonator` | Fixed-step ELSE and SSA trajectory ensembles | `oregonator_else_ssa.png` |
+| `else_birth_death` | ELSE trajectory for a birth–death process | `else_birth_death.png` |
+| `ssa_birth_death` | Gillespie SSA and tau-leaping comparison | `ssa_birth_death.png` |
+| `michaelis_menten` | FSP and dense Talbot-density comparison | `michaelis_menten.png` |
+| `density_laplacian` | Talbot-density committor evolution on a reversible graph | `density_laplacian.png` |
 
-### Running examples
-
-Build the examples once, then run the executable from the build directory:
+Run an example from the repository root after building:
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j8
-
-./build/examples/fsp_oregonator
-./build/examples/fsp_toggle_switch
 ./build/examples/else_oregonator
-./build/examples/else_birth_death
-./build/examples/ssa_birth_death
 ./build/examples/michaelis_menten
-./build/examples/laplacian_committor
+./build/examples/density_laplacian
 ```
 
-The Laplacian resolvent example reads `laplacians/cs-medium.json` and writes
-`c_lapl_evolution.png`:
-
-```bash
-./build/examples/c_lapl
-```
+`density_laplacian` reads `laplacians/cs-medium.json`. The JSON object must
+contain the sparse symmetric matrix `L`, the stationary square root `h`, and
+the five-column committor matrix `C`.
 
 PNG rendering requires `gnuplot`.
 
