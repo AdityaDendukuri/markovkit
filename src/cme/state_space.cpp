@@ -70,12 +70,7 @@ void StateSpace::expand_ssa(const ReactionSystem& model,
     int n_before = static_cast<int>(states.size());
     for (int i = 0; i < n_before; ++i) {
       markovkit::State x = states[i];
-      double total = 0.0;
-      for (int k = 0; k < nk; ++k) {
-        double a = std::max(0.0, model.propensities[k](x, rates, t));
-        props[k] = a;
-        total += a;
-      }
+      const double total = model.evaluate_propensities(x, rates, t, props);
       if (total <= 0.0) {
         continue;
       }
@@ -106,14 +101,8 @@ std::pair<double, int> StateSpace::compress(const ReactionSystem& model,
   if (!exit_rates_ptr) {
     // Compute activity locally when the generator did not provide it.
     local_rates.resize(n, 0.0);
-    int nk = static_cast<int>(model.size());
     for (int i = 0; i < n; ++i) {
-      const markovkit::State& x = states[i];
-      double total = 0.0;
-      for (int k = 0; k < nk; ++k) {
-        total += std::max(0.0, model.propensities[k](x, rates, t));
-      }
-      local_rates[i] = total;
+      local_rates[i] = model.total_propensity(states[i], rates, t);
     }
     exit_rates_ptr = &local_rates;
   }

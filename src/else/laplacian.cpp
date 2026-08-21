@@ -121,11 +121,8 @@ markovkit::Trajectory laplacian_else_trajectory(const cme::ReversibleLaplacian& 
     const auto states =
         laplacian_neighborhood(laplacian, stationary_sqrt, current, options.capacity);
     auto assembled = cme::restrict_laplacian(laplacian, stationary_sqrt, states);
-    std::vector<double> local_h;
-    local_h.reserve(states.size());
-    for (num::idx state : states) {
-      local_h.push_back(stationary_sqrt[state]);
-    }
+    const auto local_h =
+        num::gather(std::span<const double>(stationary_sqrt), std::span<const num::idx>(states));
 
     Subnetwork subnetwork(cme::reversible_generator(std::move(assembled), local_h));
     if (subnetwork.boundary_states().empty()) {

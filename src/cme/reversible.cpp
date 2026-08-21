@@ -30,15 +30,7 @@ ReversibleGenerator reversible_generator(RestrictedGenerator restricted,
   // Similarity-transform -Q into a symmetric operator.
   std::vector<double> weights(stationary_sqrt.begin(), stationary_sqrt.end());
   auto symmetric = num::diagonal_similarity(num::scaled(restricted.generator, -1.0), weights);
-  // Scale the symmetry tolerance to the largest coupling.
-  double scale = 0.0;
-  for (num::idx row = 0; row < symmetric.rows(); ++row) {
-    for (num::idx column = 0; column < row; ++column) {
-      scale = std::max(scale, std::abs(symmetric(row, column)));
-      scale = std::max(scale, std::abs(symmetric(column, row)));
-    }
-  }
-  if (num::linalg::symmetry_error(symmetric) > 1e-10 * std::max(1.0, scale)) {
+  if (num::linalg::relative_symmetry_error(symmetric) > 1e-10) {
     throw std::invalid_argument("stationary weights do not symmetrize the generator");
   }
   return {std::move(restricted), std::move(weights), std::move(symmetric)};

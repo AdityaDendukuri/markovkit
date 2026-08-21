@@ -15,12 +15,8 @@ int main() {
   // Simulate by sampling exits from small local subnetworks.
   const auto path = else_sim::else_trajectory(model, rates, initial, 0.0, 20.0, {.capacity = 12});
 
-  std::vector<double> counts;
-  counts.reserve(path.states.size());
   // Extract the scalar count from each recorded state.
-  for (const auto& state : path.states) {
-    counts.push_back(state[0]);
-  }
+  const auto counts = markovkit::trajectory_component(path, 0);
 
   // Plot the piecewise-constant sample path.
   num::plt::plot(path.times, counts, "ELSE", "steps lw 2");

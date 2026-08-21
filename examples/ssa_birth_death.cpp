@@ -16,19 +16,11 @@ int main() {
   const auto exact = ssa::gillespie(model, rates, initial, 0.0, 20.0, 42);
   const auto approximate = ssa::tau_leaping(model, rates, initial, 0.0, 20.0, {}, 42);
 
-  std::vector<double> exact_counts;
-  exact_counts.reserve(exact.states.size());
   // Extract scalar counts from the exact path.
-  for (const auto& state : exact.states) {
-    exact_counts.push_back(state[0]);
-  }
+  const auto exact_counts = markovkit::trajectory_component(exact, 0);
 
-  std::vector<double> approximate_counts;
-  approximate_counts.reserve(approximate.states.size());
   // Extract scalar counts from the approximate path.
-  for (const auto& state : approximate.states) {
-    approximate_counts.push_back(state[0]);
-  }
+  const auto approximate_counts = markovkit::trajectory_component(approximate, 0);
 
   // Overlay both piecewise-constant trajectories.
   num::plt::plot(exact.times, exact_counts, "Gillespie", "steps lw 2");

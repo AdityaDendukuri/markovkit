@@ -7,8 +7,8 @@ namespace else_sim {
 
 struct Subnetwork::SolverImpl {
   // General subnetworks use an automatically selected dense or sparse solver.
-  explicit SolverImpl(num::SparseMatrix operator_matrix)
-      : linear_factor(std::make_unique<num::AutoLinearSolver>(operator_matrix)) {}
+  explicit SolverImpl(const num::SparseMatrix& operator_matrix)
+      : general_solver(std::make_unique<num::AutoLinearSolver>(operator_matrix)) {}
 
   SolverImpl(num::Matrix symmetric, std::vector<double> stationary_sqrt)
       : weights(std::move(stationary_sqrt)) {
@@ -19,7 +19,7 @@ struct Subnetwork::SolverImpl {
     }
   }
 
-  std::unique_ptr<num::AutoLinearSolver> linear_factor;
+  std::unique_ptr<num::AutoLinearSolver> general_solver;
   std::optional<num::CholeskyResult> cholesky_factor;
   std::vector<double> weights;
   mutable num::InverseDiagonalWorkspace inverse_workspace;
@@ -27,54 +27,40 @@ struct Subnetwork::SolverImpl {
   void solve(const num::Vector& b, num::Vector& x) const {
     if (cholesky_factor) {
       // Convert between generator and symmetric coordinates around the solve.
-      num::Vector transformed_b(b.size(), 0.0);
+      num::Vector transformed_b = b;
+      num::divide_elements(transformed_b, weights);
       num::Vector transformed_x(b.size(), 0.0);
-      for (num::idx state = 0; state < b.size(); ++state) {
-        transformed_b[state] = b[state] / weights[state];
-      }
       num::cholesky_solve(*cholesky_factor, transformed_b, transformed_x);
-      for (num::idx state = 0; state < b.size(); ++state) {
-        x[state] = weights[state] * transformed_x[state];
-      }
+      x = std::move(transformed_x);
+      num::scale_elements(x, weights);
       return;
     }
-    linear_factor->solve(b, x);
+    general_solver->solve(b, x);
   }
 
   void solve(const num::Matrix& right_hand_side, num::Matrix& solution) const {
     if (cholesky_factor) {
       num::Matrix transformed = right_hand_side;
-      for (num::idx row = 0; row < transformed.rows(); ++row) {
-        for (num::idx column = 0; column < transformed.cols(); ++column) {
-          transformed(row, column) /= weights[row];
-        }
-      }
+      num::divide_rows(transformed, weights);
       num::cholesky_solve(*cholesky_factor, transformed, solution);
-      for (num::idx row = 0; row < solution.rows(); ++row) {
-        for (num::idx column = 0; column < solution.cols(); ++column) {
-          solution(row, column) *= weights[row];
-        }
-      }
+      num::scale_rows(solution, weights);
       return;
     }
-    linear_factor->solve(right_hand_side, solution);
+    general_solver->solve(right_hand_side, solution);
   }
 
   void solve_transpose(const num::Vector& b, num::Vector& x) {
     if (cholesky_factor) {
       // The transpose solve reverses the similarity scaling.
-      num::Vector transformed_b(b.size(), 0.0);
+      num::Vector transformed_b = b;
+      num::scale_elements(transformed_b, weights);
       num::Vector transformed_x(b.size(), 0.0);
-      for (num::idx state = 0; state < b.size(); ++state) {
-        transformed_b[state] = weights[state] * b[state];
-      }
       num::cholesky_solve(*cholesky_factor, transformed_b, transformed_x);
-      for (num::idx state = 0; state < b.size(); ++state) {
-        x[state] = transformed_x[state] / weights[state];
-      }
+      x = std::move(transformed_x);
+      num::divide_elements(x, weights);
       return;
     }
-    linear_factor->solve_transpose(b, x);
+    general_solver->solve_transpose(b, x);
   }
 
   void inverse_diagonal(std::vector<double>& diagonal) const {
@@ -83,7 +69,7 @@ struct Subnetwork::SolverImpl {
     if (cholesky_factor) {
       num::inverse_diagonal(*cholesky_factor, result, inverse_workspace);
     } else {
-      num::inverse_diagonal(*linear_factor, result, inverse_workspace);
+      num::inverse_diagonal(*general_solver, result, inverse_workspace);
     }
     num::copy_to(result, diagonal);
   }

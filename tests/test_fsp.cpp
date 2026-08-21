@@ -62,9 +62,20 @@ void test_adaptive_fsp_birth_death() {
             << ", expected=" << expected_mean << ")\n";
 }
 
+void test_distribution_statistics() {
+  const std::vector<markovkit::State> states{{0, 2}, {2, 4}};
+  const std::vector<double> probabilities{0.25, 0.75};
+  const auto means = markovkit::species_means(states, probabilities);
+  assert(means == std::vector<double>({1.5, 3.5}));
+  const auto marginal = markovkit::marginal_distribution(states, probabilities, 0);
+  assert(marginal.at(0) == 0.25);
+  assert(marginal.at(2) == 0.75);
+}
+
 int main() {
   test_state_space_expand_compress();
   test_adaptive_fsp_birth_death();
+  test_distribution_statistics();
   std::cout << "All FSP tests passed.\n";
   return 0;
 }

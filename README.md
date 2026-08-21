@@ -27,6 +27,10 @@ generator restrictions, and reversible representations. `fsp/`, `ssa/`, and
 `fsp/{boundary,generator,state_space}.hpp`, `markovkit/reaction_system.hpp`, and
 `else/else_solver.hpp` headers remain as forwarding compatibility headers.
 
+`ReactionSystem` centralizes propensity evaluation. Shared distribution and
+trajectory utilities provide species means, marginals, component extraction,
+and observation-time lookup without duplicating loops in solvers or examples.
+
 ## Build and test
 
 ```bash

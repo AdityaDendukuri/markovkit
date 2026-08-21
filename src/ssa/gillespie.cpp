@@ -26,11 +26,7 @@ markovkit::Trajectory gillespie(const markovkit::ReactionSystem& model,
 
   // Recompute propensities after every reaction event.
   while (t < tf && path.reactions.size() < maximum_steps) {
-    double total = 0.0;
-    for (std::size_t r = 0; r < model.size(); ++r) {
-      prop[r] = std::max(0.0, model.propensities[r](current, rates, t));
-      total += prop[r];
-    }
+    const double total = model.evaluate_propensities(current, rates, t, prop);
     if (!(total > 0.0)) {
       break;
     }

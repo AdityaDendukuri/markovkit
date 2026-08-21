@@ -35,10 +35,7 @@ void expand_from_entrances(cme::StateSpace& workspace,
         if (!visited.insert(destination).second || !boundary(destination)) {
           continue;
         }
-        double total_rate = 0.0;
-        for (const auto& propensity : model.propensities) {
-          total_rate += std::max(0.0, propensity(destination, rates, 0.0));
-        }
+        const double total_rate = model.total_propensity(destination, rates, 0.0);
         // Ignore destinations with no meaningful outgoing activity.
         if (total_rate <= options.tolerance) {
           continue;

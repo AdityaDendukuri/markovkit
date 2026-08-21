@@ -41,21 +41,16 @@ int main() {
   // Occupation measures expected time spent in each state before exit.
   const auto time_spent = subnetwork.occupation(source);
 
-  std::vector<double> count(n);
+  auto count = num::linspace(0.0, static_cast<double>(n - 1), n);
   std::vector<double> occupation(n);
   std::vector<double> stationary(n);
+  num::copy_to(time_spent, occupation);
   for (num::idx state = 0; state < n; ++state) {
-    count[state] = static_cast<double>(state);
-    occupation[state] = time_spent[state];
     stationary[state] = h[state] * h[state];
   }
-  const double occupation_mass = std::accumulate(occupation.begin(), occupation.end(), 0.0);
-  const double stationary_mass = std::accumulate(stationary.begin(), stationary.end(), 0.0);
   // Compare normalized occupation and stationary profiles.
-  for (num::idx state = 0; state < n; ++state) {
-    occupation[state] /= occupation_mass;
-    stationary[state] /= stationary_mass;
-  }
+  num::clip_and_normalize_nonnegative(occupation);
+  num::clip_and_normalize_nonnegative(stationary);
 
   // The plot checks the occupation profile against equilibrium weights.
   num::plt::plot(count, stationary, "stationary", "lines lw 2");

@@ -1,6 +1,7 @@
 #include "fsp/solvers/adaptive_fsp.hpp"
 #include "cme/generator.hpp"
 #include "cme/state_space.hpp"
+#include "markovkit/statistics.hpp"
 #include <algorithm>
 #include <cmath>
 #include <random>
@@ -50,10 +51,8 @@ solve_adaptive_fsp(const FSPProblem& prob, const AdaptiveFSPParams& params) {
 
     int n = sp.size();
     // Expected internal activity sets the next propagation interval.
-    double phi = 0.0;
-    for (int i = 0; i < n; ++i) {
-      phi += sp.probs[i] * generator.diagonal_rates[i];
-    }
+    const double phi = num::dot(std::span<const double>(sp.probs),
+                                std::span<const double>(generator.diagonal_rates));
 
     double dt_flux = (phi > 0.0) ? params.eps_dt / phi : (tf - t);
     double dt = std::min(dt_flux, tf - t);
@@ -91,12 +90,7 @@ solve_adaptive_fsp(const FSPProblem& prob, const AdaptiveFSPParams& params) {
     if (params.log_interval > 0 && iter % params.log_interval == 0) {
       // Materialize diagnostics only when requested.
       if (params.progress_cb) {
-        std::vector<double> means(n_species, 0.0);
-        for (int i = 0; i < static_cast<int>(sp.states.size()); ++i) {
-          for (int s = 0; s < n_species; ++s) {
-            means[s] += sp.probs[i] * sp.states[i][s];
-          }
-        }
+        const auto means = markovkit::species_means(sp.states, sp.probs);
         params.progress_cb(iter, t, dt, sp.size(), means, pruned_mass);
       }
       if (params.dist_cb) {

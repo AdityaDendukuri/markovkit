@@ -41,12 +41,8 @@ int main() {
   // Form comparable single-species marginals.
   for (std::size_t species = 0; species < 4; ++species) {
     fsp_marginals[species] = fsp_solution.marginal(fsp_solution.n_snapshots() - 1, species);
-  }
-  for (std::size_t index = 0; index < else_solution.states.size(); ++index) {
-    for (std::size_t species = 0; species < 4; ++species) {
-      else_marginals[species][else_solution.states[index][species]] +=
-          else_solution.probability[index];
-    }
+    else_marginals[species] =
+        markovkit::marginal_distribution(else_solution.states, else_solution.probability, species);
   }
 
   // Plot matching FSP and ELSE marginals for every species.
