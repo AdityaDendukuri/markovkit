@@ -1,27 +1,19 @@
 #pragma once
-#include "fsp/multi_index.hpp"
-#include "fsp/reaction_system.hpp"
+#include "markovkit/reaction_system.hpp"
+#include "markovkit/trajectory.hpp"
+#include <limits>
 #include <vector>
 
 namespace ssa {
 
-using MultiIndex = fsp::MultiIndex;
-using State = fsp::MultiIndex;
-
-struct Trajectory {
-  std::vector<double> t;
-  std::vector<MultiIndex> states;
-  std::vector<std::size_t> reactions;
-
-  [[nodiscard]] std::size_t steps() const { return reactions.size(); }
-};
-
-// Gillespie exact direct stochastic simulation
-Trajectory gillespie(const fsp::ReactionSystem& model,
-                     const std::vector<double>& rates,
-                     const MultiIndex& initial,
-                     double t0,
-                     double tf,
-                     int seed = 42);
+/// Gillespie's exact direct stochastic simulation method.
+markovkit::Trajectory gillespie(const markovkit::ReactionSystem& model,
+                                const std::vector<double>& rates,
+                                const markovkit::State& initial,
+                                double t0,
+                                double tf,
+                                int seed = 42,
+                                std::size_t maximum_steps =
+                                    std::numeric_limits<std::size_t>::max());
 
 } // namespace ssa

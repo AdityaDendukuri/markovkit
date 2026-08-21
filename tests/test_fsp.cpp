@@ -4,11 +4,11 @@
 #include <iostream>
 
 void test_state_space_expand_compress() {
-  fsp::ReactionSystem model;
-  model.stoich_vecs = {{1}, {-1}};
+  markovkit::ReactionSystem model;
+  model.changes = {{1}, {-1}};
   model.propensities = {
-      [](const fsp::MultiIndex&, const std::vector<double>& r, double) { return r[0]; },
-      [](const fsp::MultiIndex& x, const std::vector<double>& r, double) { return r[1] * x[0]; }};
+      [](const markovkit::State&, const std::vector<double>& r, double) { return r[0]; },
+      [](const markovkit::State& x, const std::vector<double>& r, double) { return r[1] * x[0]; }};
 
   fsp::StateSpace sp;
   sp.add_state({0}, 1.0);
@@ -18,9 +18,9 @@ void test_state_space_expand_compress() {
   assert(sp.size() == 3); // 0, 1, 2
 
   std::vector<double> rates = {5.0, 0.1};
-  auto [A, erb, diag] = fsp::build_generator(sp, model, rates, 0.0, false);
-  assert(A.n_rows() == 3);
-  assert(diag[0] == 5.0);
+  auto generator = fsp::build_generator(sp, model, rates, 0.0, false);
+  assert(generator.matrix.n_rows() == 3);
+  assert(generator.diagonal_rates[0] == 5.0);
 
   auto [flux, n_removed] = sp.compress(model, rates, 0.0, 0.5, 1e-6);
   assert(sp.size() <= 3);
@@ -31,11 +31,11 @@ void test_state_space_expand_compress() {
 }
 
 void test_adaptive_fsp_birth_death() {
-  fsp::ReactionSystem model;
-  model.stoich_vecs = {{1}, {-1}};
+  markovkit::ReactionSystem model;
+  model.changes = {{1}, {-1}};
   model.propensities = {
-      [](const fsp::MultiIndex&, const std::vector<double>& r, double) { return r[0]; },
-      [](const fsp::MultiIndex& x, const std::vector<double>& r, double) { return r[1] * x[0]; }};
+      [](const markovkit::State&, const std::vector<double>& r, double) { return r[0]; },
+      [](const markovkit::State& x, const std::vector<double>& r, double) { return r[1] * x[0]; }};
 
   fsp::FSPProblem prob;
   prob.model = model;

@@ -1,94 +1,84 @@
 #pragma once
-#include "fsp/multi_index.hpp"
-#include "fsp/reaction_system.hpp"
 #include "fsp/state_space.hpp"
+#include "markovkit/boundary_transition.hpp"
 #include <memory>
 #include <numerics.hpp>
-#include <optional>
+#include <unordered_map>
 #include <vector>
 
 namespace else_sim {
 
-using MultiIndex = fsp::MultiIndex;
-using State = fsp::MultiIndex;
+/// First two occupation moments from a shared factorization of -R.
+struct OccupationMoments {
+  num::Matrix first;  // (-R)^-1 * starts
+  num::Matrix second; // (-R)^-2 * starts
 
-// Transition crossing subnetwork boundary to an outside state
-struct ExitEdge {
-  num::idx source;       // source state index in subnetwork
-  num::idx destination;  // destination index in destinations list
-  double rate;
+  [[nodiscard]] num::idx size() const {
+    return first.rows();
+  }
+  [[nodiscard]] num::idx starts() const {
+    return first.cols();
+  }
 };
 
-// First and second occupancy moments: u = (-R)^-1 p and u^(2) = (-R)^-2 p
-struct OccupancyMoments {
-  num::Matrix first;   // (-R)^-1 * starts
-  num::Matrix second;  // (-R)^-2 * starts
-
-  [[nodiscard]] num::idx size() const { return first.rows(); }
-  [[nodiscard]] num::idx starts() const { return first.cols(); }
-};
-
-// Restricted generator R and exit boundary for a discrete state subset
+/// Restricted generator, boundary transitions, and occupation solver.
 class Subnetwork {
 public:
   Subnetwork(const fsp::StateSpace& sp,
-             const fsp::ReactionSystem& model,
+             const markovkit::ReactionSystem& model,
              const std::vector<double>& rates,
              double t = 0.0);
   ~Subnetwork();
   Subnetwork(Subnetwork&&) noexcept;
   Subnetwork& operator=(Subnetwork&&) noexcept;
 
-  [[nodiscard]] num::idx size() const { return states_.size(); }
-  [[nodiscard]] const std::vector<MultiIndex>& states() const { return states_; }
-  [[nodiscard]] const std::vector<MultiIndex>& destinations() const { return destinations_; }
-  [[nodiscard]] const std::vector<num::idx>& boundary_states() const { return boundary_states_; }
-  [[nodiscard]] const std::vector<double>& exit_rates() const { return exit_rates_; }
-  [[nodiscard]] const std::vector<double>& total_rates() const { return total_rates_; }
-  [[nodiscard]] const std::vector<ExitEdge>& exit_edges() const { return edges_; }
-  [[nodiscard]] const num::SparseMatrix& generator() const { return R_; }
+  [[nodiscard]] num::idx size() const {
+    return states_.size();
+  }
+  [[nodiscard]] const std::vector<markovkit::State>& states() const {
+    return states_;
+  }
+  [[nodiscard]] const std::vector<num::idx>& boundary_states() const {
+    return boundary_states_;
+  }
+  [[nodiscard]] const std::vector<markovkit::BoundaryTransition>& boundary() const {
+    return boundary_;
+  }
+  [[nodiscard]] const num::SparseMatrix& generator() const {
+    return R_;
+  }
 
-  int find(const MultiIndex& x) const;
+  [[nodiscard]] int find(const markovkit::State& x) const;
 
-  // Solves (-R) u = start  ->  expected time spent in each state
-  num::Vector occupation(const num::Vector& start) const;
+  // Solve (-R)u = start; u is the expected time spent in each state.
+  [[nodiscard]] num::Vector occupation(const num::Vector& start) const;
 
-  // Solves (-R) U = starts and (-R) U2 = U  ->  1st and 2nd moments
-  OccupancyMoments moments(const num::Matrix& starts) const;
+  // Compute (-R)^-1 starts and (-R)^-2 starts using one LU factorization.
+  [[nodiscard]] OccupationMoments occupation_moments(const num::Matrix& starts) const;
 
-  // Escape probabilities from boundary states, normalized
-  std::vector<double> escape_probabilities(const num::Vector& occupancy) const;
-  std::vector<double> escape_probabilities(const OccupancyMoments& moments, num::idx col = 0) const;
+  [[nodiscard]] std::vector<double>
+  exit_probabilities(const num::Vector& occupation) const;
+  [[nodiscard]] std::vector<double>
+  exit_probabilities(const OccupationMoments& occupation, num::idx column = 0) const;
 
-  // Mean time until exit given exit occurs at exit_state_idx: u^(2)[b] / u[b]
-  double conditional_mean_time(const OccupancyMoments& moments,
-                               num::idx exit_state_idx,
-                               num::idx col = 0) const;
+  [[nodiscard]] double conditional_exit_time(const OccupationMoments& occupation,
+                                             num::idx boundary_state,
+                                             num::idx column = 0) const;
 
-  // Expected entry counts: total_rate[j] * u[j] - start[j]
-  std::vector<double> entry_counts(const num::Vector& occupancy,
-                                   const num::Vector& start) const;
+  [[nodiscard]] std::vector<double> expected_entries(const num::Vector& occupation,
+                                                     const num::Vector& start) const;
 
-  // Exact loss in mean exit time if state is cut
-  std::optional<std::vector<double>> cut_time_losses(const num::Vector& occupancy) const;
-
-  // Flux of probability entering each outside destination state
-  std::vector<double> exit_flux(const num::Vector& occupancy) const;
-  std::vector<num::cplx> exit_flux(const std::vector<num::cplx>& occupancy) const;
-
-  // Resolvent solve (sI - R)^-1 start for complex shift s
-  std::vector<num::cplx> solve_resolvent(num::cplx s,
-                                         const std::vector<num::cplx>& start) const;
+  // Exact mean-exit-time loss from removing each state.
+  [[nodiscard]] std::vector<double> cut_time_losses(const num::Vector& occupation) const;
 
 private:
-  std::vector<MultiIndex> states_;
-  fsp::FlatHashMap<MultiIndex, int> index_;
+  std::vector<markovkit::State> states_;
+  std::unordered_map<markovkit::State, int> index_;
   num::SparseMatrix R_{0, 0, {}, {}, {0}};
   std::vector<double> total_rates_;
   std::vector<double> exit_rates_;
   std::vector<num::idx> boundary_states_;
-  std::vector<MultiIndex> destinations_;
-  std::vector<ExitEdge> edges_;
+  std::vector<markovkit::BoundaryTransition> boundary_;
 
   struct SolverImpl;
   std::unique_ptr<SolverImpl> solver_;

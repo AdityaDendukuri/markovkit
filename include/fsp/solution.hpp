@@ -1,24 +1,26 @@
 #pragma once
-#include "fsp/multi_index.hpp"
+#include "markovkit/state.hpp"
 #include <map>
 #include <vector>
 
 namespace fsp {
 
-// Single snapshot of the probability distribution
+/// Probability values and the states to which they correspond.
 struct FSPSnapshot {
-  std::vector<MultiIndex> states;
+  std::vector<markovkit::State> states;
   std::vector<double> probs;
 };
 
-// Solution trajectory across time snapshots
+/// Saved finite-state probability distributions over time.
 struct FSPSolution {
-  std::vector<double> t;
+  std::vector<double> times;
   std::vector<FSPSnapshot> snapshots;
   std::vector<int> state_space_sizes;
   int n_species = 0;
 
-  [[nodiscard]] int n_snapshots() const { return static_cast<int>(t.size()); }
+  [[nodiscard]] int n_snapshots() const {
+    return static_cast<int>(times.size());
+  }
 
   // Computes species means per snapshot: (n_snapshots x n_species)
   [[nodiscard]] std::vector<std::vector<double>> mean_trajectory() const;

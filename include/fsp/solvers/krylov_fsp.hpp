@@ -7,7 +7,7 @@
 
 namespace fsp {
 
-// Parameters for KrylovFSP (Vo & Sidje 2016)
+/// Parameters for the mass-controlled Krylov-FSP method of Vo and Sidje.
 struct KrylovFSPParams {
   double eps = 1e-6;              // error tolerance
   double tau_init = 1.0;          // initial step
@@ -25,7 +25,7 @@ struct KrylovFSPParams {
   std::function<void(int, double, double, int, double)> progress_cb;
 };
 
-// Diagnostics from KrylovFSP
+/// Accepted step sizes, retained mass, and rejected-step count.
 struct KrylovFSPDiagnostics {
   std::vector<double> tau_log;
   std::vector<double> mass_log;
@@ -35,7 +35,7 @@ struct KrylovFSPDiagnostics {
   int total_iters = 0;
 };
 
-// Solve CME with Krylov-FSP algorithm
+/// Solve the CME with adaptive support and Krylov exponential propagation.
 std::tuple<FSPSolution, KrylovFSPDiagnostics>
 solve_krylov_fsp(const FSPProblem& prob, const KrylovFSPParams& params = {});
 

@@ -20,7 +20,7 @@ add_library(markovkit
     src/fsp/solvers/krylov_fsp.cpp
     src/else/subnetwork.cpp
     src/else/else_solver.cpp
-    src/else/fourier.cpp
+    src/else/density.cpp
     src/else/laplacian.cpp
     src/ssa/gillespie.cpp
     src/ssa/tau_leaping.cpp

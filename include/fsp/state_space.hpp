@@ -1,50 +1,53 @@
 #pragma once
 #include "fsp/boundary.hpp"
-#include "fsp/detail/flat_hash_map.hpp"
-#include "fsp/multi_index.hpp"
-#include "fsp/reaction_system.hpp"
+#include "markovkit/reaction_system.hpp"
 #include <cstddef>
 #include <random>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
 namespace fsp {
 
-// Discrete active state space with indexed lookups
+/// Active states, aligned probabilities, and state-to-local-index lookup.
 struct StateSpace {
-  std::vector<MultiIndex> states;
+  std::vector<markovkit::State> states;
   std::vector<double> probs;
-  fsp::FlatHashMap<MultiIndex, int> index;
-  bool dirty = true;
+  std::unordered_map<markovkit::State, int> index;
 
-  [[nodiscard]] int size() const { return static_cast<int>(states.size()); }
-  [[nodiscard]] bool empty() const { return states.empty(); }
+  [[nodiscard]] int size() const {
+    return static_cast<int>(states.size());
+  }
+  [[nodiscard]] bool empty() const {
+    return states.empty();
+  }
 
   // Position of state, or -1 if absent
-  [[nodiscard]] int find(const MultiIndex& x) const {
+  [[nodiscard]] int find(const markovkit::State& x) const {
     auto it = index.find(x);
     return it != index.end() ? it->second : -1;
   }
 
   // Add state if absent
-  void add_state(const MultiIndex& x, double prob = 0.0);
+  void add_state(const markovkit::State& x, double prob = 0.0);
 
   // Remove states flagged true in remove_mask
   void remove_states(const std::vector<bool>& remove_mask);
 
-  // Expand state space by stoichiometric neighbors inside boundary
-  void expand(const ReactionSystem& model, const BoundaryCondition& bc, int depth = 1);
+  // Add `depth` shells of stoichiometric neighbors inside the boundary.
+  void expand(const markovkit::ReactionSystem& model, const BoundaryCondition& bc, int depth = 1);
 
-  // SSA-guided expansion
-  void expand_ssa(const ReactionSystem& model,
+  // Add one propensity-weighted neighbor per state and shell.
+  void expand_ssa(const markovkit::ReactionSystem& model,
                   const std::vector<double>& rates,
                   double t,
                   const BoundaryCondition& bc,
                   int depth,
                   std::mt19937& rng);
 
-  // Flux-weighted pruning: returns (total_flux, n_removed)
-  std::pair<double, int> compress(const ReactionSystem& model,
+  // Prune low-probability candidates whose outgoing flux is negligible.
+  // Returns (total outgoing flux, number removed).
+  std::pair<double, int> compress(const markovkit::ReactionSystem& model,
                                   const std::vector<double>& rates,
                                   double t,
                                   double prob_quantile,

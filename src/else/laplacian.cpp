@@ -1,15 +1,13 @@
 #include "else/laplacian.hpp"
-
 #include <algorithm>
-#include <map>
 #include <queue>
 #include <stdexcept>
 
 namespace else_sim {
 namespace {
 
-MultiIndex graph_state(num::idx state) {
-  return MultiIndex{static_cast<int>(state)};
+markovkit::State graph_state(num::idx state) {
+  return markovkit::State{static_cast<int>(state)};
 }
 
 void validate_laplacian(const num::SparseMatrix& laplacian,
@@ -44,6 +42,7 @@ std::vector<num::idx> laplacian_neighborhood(const num::SparseMatrix& laplacian,
   std::vector<num::idx> states{initial};
   selected[initial] = true;
 
+  // Connectivity constrains the support; stationary weight orders its frontier.
   const auto expose = [&](num::idx state) {
     for (num::idx k = laplacian.row_ptr()[state]; k < laplacian.row_ptr()[state + 1]; ++k) {
       const num::idx neighbor = laplacian.col_idx()[k];
@@ -71,32 +70,33 @@ std::vector<num::idx> laplacian_neighborhood(const num::SparseMatrix& laplacian,
   return states;
 }
 
-DensityStep laplacian_density_step(const num::SparseMatrix& laplacian,
-                                   const std::vector<double>& stationary_sqrt,
-                                   const std::vector<num::idx>& states) {
+// Column generator: R = -diag(h) * L * diag(h)^-1, i.e. R_ij = -L_ij * (h_i / h_j)
+// Satisfies 1^T R = 0 (column sums zero) and R_ij >= 0 (i != j)
+DensitySubnetwork laplacian_density_subnetwork(const num::SparseMatrix& laplacian,
+                                               const std::vector<double>& stationary_sqrt,
+                                               const std::vector<num::idx>& states) {
   validate_laplacian(laplacian, stationary_sqrt);
   if (states.empty()) {
-    throw std::invalid_argument("a Laplacian density step requires states");
+    throw std::invalid_argument("a Laplacian density subnetwork requires states");
   }
 
-  DensityStep step;
-  step.states.reserve(states.size());
+  DensitySubnetwork subnetwork;
+  subnetwork.states.reserve(states.size());
   for (num::idx state : states) {
     if (state >= laplacian.n_rows()) {
       throw std::out_of_range("Laplacian state is out of range");
     }
     const auto id = graph_state(state);
-    if (step.index.count(id)) {
+    if (subnetwork.index.count(id)) {
       throw std::invalid_argument("Laplacian density states must be unique");
     }
-    step.index[id] = static_cast<int>(step.states.size());
-    step.states.push_back(id);
+    subnetwork.index[id] = static_cast<int>(subnetwork.states.size());
+    subnetwork.states.push_back(id);
   }
 
   std::vector<num::idx> rows;
   std::vector<num::idx> columns;
   std::vector<double> values;
-  std::map<num::idx, num::idx> destination_index;
 
   for (num::idx local_column = 0; local_column < states.size(); ++local_column) {
     const num::idx global_column = states[local_column];
@@ -106,6 +106,7 @@ DensityStep laplacian_density_step(const num::SparseMatrix& laplacian,
          ++k) {
       const num::idx global_row = laplacian.col_idx()[k];
       if (global_row == global_column) {
+        // Keep the full diagonal so omitted off-diagonal rates remain exit rates.
         rows.push_back(local_column);
         columns.push_back(local_column);
         values.push_back(-laplacian.values()[k]);
@@ -122,18 +123,13 @@ DensityStep laplacian_density_step(const num::SparseMatrix& laplacian,
         continue;
       }
 
-      const auto local = step.index.find(graph_state(global_row));
-      if (local != step.index.end()) {
+      const auto local = subnetwork.index.find(graph_state(global_row));
+      if (local != subnetwork.index.end()) {
         rows.push_back(static_cast<num::idx>(local->second));
         columns.push_back(local_column);
         values.push_back(rate);
       } else {
-        const auto [destination, inserted] =
-            destination_index.emplace(global_row, destination_index.size());
-        if (inserted) {
-          step.destinations.push_back(graph_state(global_row));
-        }
-        step.edges.push_back({local_column, destination->second, rate});
+        subnetwork.boundary.push_back({local_column, graph_state(global_row), rate});
       }
     }
     if (!diagonal_found) {
@@ -141,18 +137,20 @@ DensityStep laplacian_density_step(const num::SparseMatrix& laplacian,
     }
   }
 
-  step.generator =
+  subnetwork.generator =
       num::SparseMatrix::from_triplets(states.size(), states.size(), rows, columns, values);
-  return step;
+  subnetwork.symmetric_pattern = true;
+  return subnetwork;
 }
 
-std::vector<DensityStep> laplacian_density_steps(const num::SparseMatrix& laplacian,
-                                                 const std::vector<double>& stationary_sqrt,
-                                                 num::idx initial,
-                                                 num::idx capacity,
-                                                 int step_count) {
-  if (step_count < 1) {
-    throw std::invalid_argument("Laplacian density requires at least one step");
+std::vector<DensitySubnetwork>
+laplacian_density_subnetworks(const num::SparseMatrix& laplacian,
+                              const std::vector<double>& stationary_sqrt,
+                              num::idx initial,
+                              num::idx capacity,
+                              int count) {
+  if (count < 1) {
+    throw std::invalid_argument("Laplacian density requires at least one subnetwork");
   }
 
   auto states = laplacian_neighborhood(laplacian, stationary_sqrt, initial, capacity);
@@ -161,26 +159,23 @@ std::vector<DensityStep> laplacian_density_steps(const num::SparseMatrix& laplac
     included[state] = true;
   }
 
-  std::vector<DensityStep> steps;
-  steps.reserve(static_cast<std::size_t>(step_count));
-  for (int number = 0; number < step_count; ++number) {
-    auto step = laplacian_density_step(laplacian, stationary_sqrt, states);
-    if (number == 0) {
-      step.start[graph_state(initial)] = 1.0;
-    }
-    steps.push_back(std::move(step));
-    if (steps.back().destinations.empty()) {
+  std::vector<DensitySubnetwork> subnetworks;
+  subnetworks.reserve(static_cast<std::size_t>(count));
+  for (int number = 0; number < count; ++number) {
+    subnetworks.push_back(laplacian_density_subnetwork(laplacian, stationary_sqrt, states));
+    if (subnetworks.back().boundary.empty()) {
       break;
     }
-    for (const auto& destination : steps.back().destinations) {
-      const auto state = static_cast<num::idx>(destination[0]);
+    // The next restriction contains every state reached through this boundary.
+    for (const auto& transition : subnetworks.back().boundary) {
+      const auto state = static_cast<num::idx>(transition.destination[0]);
       if (!included[state]) {
         included[state] = true;
         states.push_back(state);
       }
     }
   }
-  return steps;
+  return subnetworks;
 }
 
 } // namespace else_sim

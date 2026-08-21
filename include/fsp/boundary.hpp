@@ -1,19 +1,27 @@
 #pragma once
-#include "fsp/multi_index.hpp"
+#include "markovkit/state.hpp"
+#include <algorithm>
 #include <functional>
 #include <vector>
 
 namespace fsp {
 
 // Returns true if state x is within domain
-using BoundaryCondition = std::function<bool(const MultiIndex&)>;
+using BoundaryCondition = std::function<bool(const markovkit::State&)>;
+
+inline BoundaryCondition nonnegative_boundary() {
+  return [](const markovkit::State& state) {
+    return std::all_of(state.begin(), state.end(), [](int value) { return value >= 0; });
+  };
+}
 
 // [0, bound] on all coordinates
 inline BoundaryCondition rect_boundary(int bound) {
-  return [bound](const MultiIndex& x) -> bool {
+  return [bound](const markovkit::State& x) -> bool {
     for (int c : x) {
-      if (c < 0 || c > bound) { return false;
-}
+      if (c < 0 || c > bound) {
+        return false;
+      }
     }
     return true;
   };
@@ -21,12 +29,14 @@ inline BoundaryCondition rect_boundary(int bound) {
 
 // [0, bounds[i]] per coordinate
 inline BoundaryCondition rect_boundary(const std::vector<int>& bounds) {
-  return [bounds](const MultiIndex& x) -> bool {
-    if (x.size() != bounds.size()) { return false;
-}
+  return [bounds](const markovkit::State& x) -> bool {
+    if (x.size() != bounds.size()) {
+      return false;
+    }
     for (std::size_t i = 0; i < x.size(); ++i) {
-      if (x[i] < 0 || x[i] > bounds[i]) { return false;
-}
+      if (x[i] < 0 || x[i] > bounds[i]) {
+        return false;
+      }
     }
     return true;
   };
