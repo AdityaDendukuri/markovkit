@@ -22,9 +22,18 @@ if(TARGET numerics::io)
 
     add_executable(laplacian_trajectories laplacian_trajectories.cpp)
     target_link_libraries(laplacian_trajectories PRIVATE markovkit::markovkit numerics::plot numerics::io)
-else()
-    message(STATUS "Boost.JSON unavailable; skipping JSON-backed Laplacian examples")
+
+    add_executable(benchmark_laplacians benchmark_laplacians.cpp)
+    target_link_libraries(benchmark_laplacians PRIVATE markovkit::markovkit numerics::solvers numerics::io)
+    target_include_directories(benchmark_laplacians PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../approxchol/include")
 endif()
 
 add_executable(dense_cholesky_cme dense_cholesky_cme.cpp)
 target_link_libraries(dense_cholesky_cme PRIVATE markovkit::markovkit numerics::plot)
+
+add_executable(compare_approxchol_cme compare_approxchol_cme.cpp)
+target_link_libraries(compare_approxchol_cme PRIVATE markovkit::markovkit numerics::solvers)
+target_include_directories(compare_approxchol_cme PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../approxchol/include")
+
+add_executable(talbot_vs_fsp_laplacian talbot_vs_fsp_laplacian.cpp)
+target_link_libraries(talbot_vs_fsp_laplacian PRIVATE markovkit::markovkit numerics::plot)
