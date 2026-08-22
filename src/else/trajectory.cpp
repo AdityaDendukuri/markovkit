@@ -6,18 +6,19 @@
 #include <set>
 #include <stdexcept>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace else_sim {
 namespace {
 
-using StateWeights = std::map<markovkit::State, double>;
+using StateWeights = std::unordered_map<markovkit::State, double>;
 
 void expand_from_entrances(cme::StateSpace &workspace, const StateWeights &entrances,
                            const markovkit::ReactionSystem &model, const std::vector<double> &rates,
                            const ELSEOptions &options) {
     // Seed the expansion frontier with the current entrance distribution.
     std::vector<markovkit::State> frontier;
-    std::set<markovkit::State> visited;
+    std::unordered_set<markovkit::State> visited;
     for (const auto &[state, weight] : entrances) {
         workspace.add_state(state, weight);
         frontier.push_back(state);
