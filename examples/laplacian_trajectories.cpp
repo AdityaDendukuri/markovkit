@@ -7,8 +7,7 @@
 
 int main() {
     // Load the graph Laplacian, stationary weights, and committors.
-    const auto document = num::io::read_json("laplacians/cs-medium.json");
-    const auto &data = document.as_object();
+    const auto data = num::io::read_json("laplacians/cs-medium.json");
     const auto laplacian = num::io::sparse_matrix(data.at("L"));
     const auto h = num::io::json_vector<double>(data.at("h"));
     const auto committors = num::io::json_matrix<double>(data.at("C"));
