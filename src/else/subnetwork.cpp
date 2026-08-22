@@ -23,7 +23,7 @@ struct Subnetwork::SolverImpl {
 
     // solver vars
     std::unique_ptr<num::AutoLinearSolver> general_solver; // picks LU or sparse LU etc..
-    std::optional<num::CholeskyResult> cholesky_factor;    // cholesky
+    std::optional<num::CholeskyResult> cholesky_factor; // cholesky would be non-empty if symmetric
     std::vector<double> weights;
 
     // inverse diagonal vars

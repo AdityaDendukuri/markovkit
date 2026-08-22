@@ -59,9 +59,21 @@ void test_reaction_and_trajectory_helpers() {
            std::vector<std::size_t>({0, 1, 1, 2}));
 }
 
+void test_templated_rng() {
+    markovkit::ReactionSystem model{
+        .changes = {{1}},
+        .propensities = {[](const markovkit::State &, const auto &, double) { return 1.0; }}};
+    std::mt19937_64 custom_rng(12345);
+    const auto path = ssa::gillespie(model, {}, {0}, 0.0, 100.0, custom_rng, 5);
+    assert(path.reactions.size() == 5);
+    assert(path.states.size() == 6);
+    assert(path.times.back() < 100.0);
+}
+
 int main() {
     test_gillespie_birth_death();
     test_gillespie_step_limit();
+    test_templated_rng();
     test_reaction_and_trajectory_helpers();
     std::cout << "All SSA tests passed.\n";
     return 0;

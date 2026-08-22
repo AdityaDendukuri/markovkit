@@ -23,8 +23,6 @@ add_library(markovkit
     src/else/trajectory.cpp
     src/else/density.cpp
     src/else/laplacian.cpp
-    src/ssa/gillespie.cpp
-    src/ssa/tau_leaping.cpp
 )
 add_library(markovkit::markovkit ALIAS markovkit)
 
