@@ -24,33 +24,30 @@ std::vector<num::idx> laplacian_neighborhood(const num::SparseMatrix &laplacian,
     }
 
     std::vector<bool> selected(laplacian.n_rows(), false);
-    std::vector<bool> queued(laplacian.n_rows(), false);
-    std::priority_queue<std::pair<double, num::idx>> frontier;
-    std::vector<num::idx> states{initial};
-    selected[initial] = true;
+    num::MaxIndexedPQ<double> frontier(laplacian.n_rows());
+    std::vector<num::idx> states;
+    states.reserve(capacity);
 
-    // Connectivity constrains the support; stationary weight orders its frontier.
     const auto expose = [&](num::idx state) {
         for (num::idx k = laplacian.row_ptr()[state]; k < laplacian.row_ptr()[state + 1]; ++k) {
             const num::idx neighbor = laplacian.col_idx()[k];
-            if (neighbor != state && !selected[neighbor] && !queued[neighbor]) {
-                queued[neighbor] = true;
-                frontier.emplace(stationary_sqrt[neighbor], neighbor);
+            if (neighbor != state && !selected[neighbor] && !frontier.contains(neighbor)) {
+                frontier.push(neighbor, stationary_sqrt[neighbor]);
             }
         }
     };
 
+    selected[initial] = true;
+    states.push_back(initial);
     expose(initial);
+
     // Grow the connected region from the highest-weight frontier state.
     while (states.size() < capacity) {
         if (frontier.empty()) {
             throw std::invalid_argument("initial component is smaller than the requested capacity");
         }
-        const num::idx state = frontier.top().second;
+        const num::idx state = frontier.top_index();
         frontier.pop();
-        if (selected[state]) {
-            continue;
-        }
         selected[state] = true;
         states.push_back(state);
         expose(state);

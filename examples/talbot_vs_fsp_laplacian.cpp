@@ -9,56 +9,6 @@
 
 namespace {
 
-num::Matrix generate_random_markov_generator(num::idx n, double edge_prob, std::mt19937_64 &rng) {
-    std::uniform_real_distribution<double> weight_dist(0.5, 2.0);
-    std::uniform_real_distribution<double> prob_dist(0.0, 1.0);
-
-    num::Matrix Q(n, n, 0.0);
-
-    // Ensure connectivity via a random spanning tree
-    std::vector<num::idx> connected = {0};
-    std::vector<num::idx> remaining;
-    for (num::idx i = 1; i < n; ++i) remaining.push_back(i);
-
-    while (!remaining.empty()) {
-        std::uniform_int_distribution<std::size_t> conn_dist(0, connected.size() - 1);
-        std::uniform_int_distribution<std::size_t> rem_dist(0, remaining.size() - 1);
-
-        num::idx u = connected[conn_dist(rng)];
-        std::size_t v_idx = rem_dist(rng);
-        num::idx v = remaining[v_idx];
-
-        double w1 = weight_dist(rng);
-        double w2 = weight_dist(rng);
-        Q(u, v) = w1;
-        Q(v, u) = w2;
-
-        connected.push_back(v);
-        remaining.erase(remaining.begin() + static_cast<long>(v_idx));
-    }
-
-    // Add random off-diagonal jump edges
-    for (num::idx i = 0; i < n; ++i) {
-        for (num::idx j = i + 1; j < n; ++j) {
-            if (Q(i, j) == 0.0 && prob_dist(rng) < edge_prob) {
-                Q(i, j) = weight_dist(rng);
-                Q(j, i) = weight_dist(rng);
-            }
-        }
-    }
-
-    // Conservative column sums: dp/dt = Q*p
-    for (num::idx j = 0; j < n; ++j) {
-        double col_sum = 0.0;
-        for (num::idx i = 0; i < n; ++i) {
-            if (i != j) col_sum += Q(i, j);
-        }
-        Q(j, j) = -col_sum;
-    }
-
-    return Q;
-}
-
 num::Vector compute_exact_krylov_fsp(const num::Matrix &Q, const num::Vector &p0, double t) {
     num::operators::DenseOp Q_op(Q);
     return num::expv(t, Q_op, p0, 50, 1e-15);
@@ -103,7 +53,9 @@ int main() {
     const idx N = 120;
     std::mt19937_64 rng(12345);
 
-    Matrix Q = generate_random_markov_generator(N, 0.08, rng);
+    // Generate connected random Markov jump generator via graph library
+    Graph G = graph::erdos_renyi(N, 0.08, rng, /*ensure_connected=*/true, 0.5, 2.0);
+    Matrix Q = G.dense_markov_generator(/*column_oriented=*/true);
     Vector p0 = unit_vector(N, 0);
 
     HessenbergResolventSolver hess_solver(Q);
