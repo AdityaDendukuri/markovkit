@@ -94,7 +94,7 @@ std::vector<double> compute_symmetrized_losses(const Subnetwork &subnetwork,
         }
     } else {
         // Fallback to LU solves if Cholesky is not strictly positive definite
-        auto lu_factor = num::lu(S);
+        auto lu_factor = num::lu(num::assume_square(S));
         num::Vector e(n, 0.0);
         num::Vector y(n, 0.0);
         for (num::idx i = 0; i < n; ++i) {

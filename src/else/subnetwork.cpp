@@ -130,7 +130,7 @@ struct Subnetwork::SolverImpl {
         num::Matrix block;
         if (cholesky_factor) {
             num::inverse_principal_block(*cholesky_factor, indices, block, inverse_workspace);
-            const auto block_factor = num::cholesky(block);
+            const auto block_factor = num::cholesky(num::assume_spd(std::move(block)));
             if (!block_factor.success) {
                 throw std::runtime_error("cut-time inverse block is not positive definite");
             }
@@ -148,7 +148,7 @@ struct Subnetwork::SolverImpl {
         }
 
         num::inverse_principal_block(*general_solver, indices, block, inverse_workspace);
-        const auto block_factor = num::lu(block);
+        const auto block_factor = num::lu(num::assume_square(std::move(block)));
         if (block_factor.singular) {
             throw std::runtime_error("cut-time inverse block is singular");
         }
