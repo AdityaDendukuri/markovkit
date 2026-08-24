@@ -324,54 +324,41 @@ std::vector<double> Subnetwork::cut_time_losses(const num::Vector &occupancy,
 double Subnetwork::naive_cut_time_loss(const num::Vector &occupancy,
                                        std::span<const num::idx> removed_states) const {
     const num::idx n = size();
-    const num::idx r = removed_states.size();
-    if (r == 0) {
+    if (removed_states.empty()) {
         return 0.0;
     }
-    if (r >= n) {
-        double total = 0.0;
-        for (num::idx i = 0; i < n; ++i) {
-            total += occupancy[i];
-        }
-        return total;
+    if (removed_states.size() >= n) {
+        return std::accumulate(occupancy.begin(), occupancy.end(), 0.0);
     }
 
-    std::vector<bool> is_removed(n, false);
+    std::vector<bool> removed(n, false);
     for (num::idx s : removed_states) {
         if (s < n) {
-            is_removed[s] = true;
+            removed[s] = true;
         }
     }
 
     std::vector<num::idx> kept;
-    kept.reserve(n - r);
+    kept.reserve(n - removed_states.size());
     for (num::idx i = 0; i < n; ++i) {
-        if (!is_removed[i]) {
+        if (!removed[i]) {
             kept.push_back(i);
         }
     }
     const num::idx m = kept.size();
 
-    // 1. Build reduced generator submatrix -R_reduced
+    // Extract reduced generator -R_reduced and initial entrance p_reduced = (-R * occupancy)[kept]
     num::Matrix R_red(m, m, 0.0);
+    num::Vector p_red(m, 0.0);
     for (num::idx i = 0; i < m; ++i) {
         for (num::idx j = 0; j < m; ++j) {
             R_red(i, j) = -R_(kept[i], kept[j]);
         }
-    }
-
-    // 2. Compute entrance vector p_0 = (-R) * occupancy
-    num::Vector p_red(m, 0.0);
-    for (num::idx i = 0; i < m; ++i) {
-        const num::idx orig_i = kept[i];
-        double p_val = 0.0;
         for (num::idx j = 0; j < n; ++j) {
-            p_val += -R_(orig_i, j) * occupancy[j];
+            p_red[i] += -R_(kept[i], j) * occupancy[j];
         }
-        p_red[i] = std::max(0.0, p_val);
     }
 
-    // 3. Solve (-R_red) u_red = p_red directly
     num::Vector u_red(m, 0.0);
     auto lu_red = num::lu(num::assume_square(std::move(R_red)));
     if (lu_red.singular) {
@@ -379,15 +366,8 @@ double Subnetwork::naive_cut_time_loss(const num::Vector &occupancy,
     }
     num::lu_solve(lu_red, p_red, u_red);
 
-    // 4. Loss = sum(occupancy) - sum(u_red)
-    double tau_orig = 0.0;
-    for (num::idx i = 0; i < n; ++i) {
-        tau_orig += occupancy[i];
-    }
-    double tau_red = 0.0;
-    for (num::idx i = 0; i < m; ++i) {
-        tau_red += std::max(0.0, u_red[i]);
-    }
+    const double tau_orig = std::accumulate(occupancy.begin(), occupancy.end(), 0.0);
+    const double tau_red = std::accumulate(u_red.begin(), u_red.end(), 0.0);
     return std::max(0.0, tau_orig - tau_red);
 }
 
@@ -408,8 +388,9 @@ Subnetwork::cut_time_loss_with_diagnostics(const num::Vector &occupancy,
         return {.loss = 0.0, .estimated_error = 0.0, .naive_fallback_used = false};
     }
     if (removed_states.size() == 1) {
-        double single_loss = cut_time_losses(occupancy, removed_states).front();
-        return {.loss = single_loss, .estimated_error = 0.0, .naive_fallback_used = false};
+        return {.loss = cut_time_losses(occupancy, removed_states).front(),
+                .estimated_error = 0.0,
+                .naive_fallback_used = false};
     }
 
     const num::idx r = removed_states.size();
@@ -418,49 +399,37 @@ Subnetwork::cut_time_loss_with_diagnostics(const num::Vector &occupancy,
         u_S[i] = occupancy[removed_states[i]];
     }
 
-    num::Vector coefficients(r, 0.0);
+    num::Vector c(r, 0.0);
     num::Matrix Z_SS;
-    bool fast_success = false;
-    double residual_norm = 0.0;
-
     try {
-        solver_->solve_principal_inverse(removed_states, u_S, coefficients, &Z_SS);
+        solver_->solve_principal_inverse(removed_states, u_S, c, &Z_SS);
 
-        // Component-wise backward residual: || Z_SS * c - u_S ||_inf / ||u_S||_inf
-        double max_res = 0.0;
-        double max_rhs = 0.0;
+        // Backward residual: || Z_SS * c - u_S ||_inf / ||u_S||_inf
+        num::Vector reconstructed(r, 0.0);
+        num::matvec(Z_SS, c, reconstructed);
+        double err = 0.0, scale = 0.0;
         for (num::idx i = 0; i < r; ++i) {
-            max_rhs = std::max(max_rhs, std::abs(u_S[i]));
-            double reconstructed = 0.0;
-            for (num::idx j = 0; j < r; ++j) {
-                reconstructed += Z_SS(i, j) * coefficients[j];
+            err = std::max(err, std::abs(reconstructed[i] - u_S[i]));
+            scale = std::max(scale, std::abs(u_S[i]));
+        }
+        const double residual = err / std::max(1e-12, scale);
+
+        if (residual <= tolerance && std::isfinite(residual)) {
+            const auto &q = solver_->inverse_column_sums();
+            double loss = 0.0;
+            for (num::idx i = 0; i < r; ++i) {
+                loss += q[removed_states[i]] * c[i];
             }
-            max_res = std::max(max_res, std::abs(reconstructed - u_S[i]));
+            if (std::isfinite(loss) && loss >= 0.0) {
+                return {.loss = loss, .estimated_error = residual, .naive_fallback_used = false};
+            }
         }
-        residual_norm = max_res / std::max(1e-12, max_rhs);
+    } catch (...) {}
 
-        if (residual_norm <= tolerance && std::isfinite(residual_norm)) {
-            fast_success = true;
-        }
-    } catch (...) {
-        fast_success = false;
-        residual_norm = std::numeric_limits<double>::infinity();
-    }
-
-    if (fast_success) {
-        const auto &column_sums = solver_->inverse_column_sums();
-        double loss = 0.0;
-        for (num::idx i = 0; i < r; ++i) {
-            loss += column_sums[removed_states[i]] * coefficients[i];
-        }
-        if (std::isfinite(loss) && loss >= 0.0) {
-            return {.loss = loss, .estimated_error = residual_norm, .naive_fallback_used = false};
-        }
-    }
-
-    // Residual threshold breached or non-finite -> Recompute via naive ground-truth solve
-    double naive_loss = naive_cut_time_loss(occupancy, removed_states);
-    return {.loss = naive_loss, .estimated_error = residual_norm, .naive_fallback_used = true};
+    // Fallback to naive ground truth solve
+    return {.loss = naive_cut_time_loss(occupancy, removed_states),
+            .estimated_error = 1.0,
+            .naive_fallback_used = true};
 }
 
 double Subnetwork::cut_time_loss(const num::Vector &occupancy,

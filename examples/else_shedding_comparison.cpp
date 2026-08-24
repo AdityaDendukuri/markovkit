@@ -59,8 +59,6 @@ int main() {
     std::vector<double> state_indices(n);
     std::vector<double> rel_errors(n);
     std::vector<double> backward_residuals(n);
-    std::vector<double> woodbury_losses(n);
-    std::vector<double> naive_losses(n);
 
     double max_rel_error = 0.0;
     double max_backward_res = 0.0;
@@ -77,8 +75,6 @@ int main() {
         double rel_err = err / std::max(1e-12, loss_naive);
         double bres = diag.estimated_error;
 
-        woodbury_losses[i] = loss_woodbury;
-        naive_losses[i] = loss_naive;
         rel_errors[i] = std::max(1e-18, rel_err);
         backward_residuals[i] = std::max(1e-18, bres);
 
