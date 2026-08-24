@@ -27,17 +27,23 @@ std::vector<double> compute_expected_visits_losses(const Subnetwork &subnetwork,
 }
 
 // Method 2: Symmetrized Operator Diagonal Approximation
-// S = 0.5 * ((-R) + (-R)^T) with diagonal M-matrix dominance
+// Method 2: Steady-State Normalized Symmetrized Operator
+// S_tilde = 0.5 * (H (-R) H^-1 + H^-1 (-R)^T H) with H = diag(sqrt(pi))
 std::vector<double> compute_symmetrized_losses(const Subnetwork &subnetwork,
                                                const num::Vector &occupation) {
     const num::idx n = subnetwork.size();
     const auto &column_sums = subnetwork.inverse_column_sums();
     const auto &R = subnetwork.generator();
+    const auto weights = subnetwork.stationary_weights();
 
     num::Matrix S(n, n, 0.0);
     for (num::idx i = 0; i < n; ++i) {
+        const double h_i = (!weights.empty() && i < weights.size()) ? weights[i] : 1.0;
         for (num::idx j = 0; j < n; ++j) {
-            S(i, j) = 0.5 * (-R(i, j) - R(j, i));
+            const double h_j = (!weights.empty() && j < weights.size()) ? weights[j] : 1.0;
+            const double r_ij = (h_i / std::max(1e-12, h_j)) * (-R(i, j));
+            const double r_ji = (h_j / std::max(1e-12, h_i)) * (-R(j, i));
+            S(i, j) = 0.5 * (r_ij + r_ji);
         }
     }
     for (num::idx i = 0; i < n; ++i) {

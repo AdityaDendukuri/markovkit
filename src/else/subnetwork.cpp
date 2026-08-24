@@ -224,6 +224,13 @@ bool Subnetwork::is_reversible() const {
     return solver_ && solver_->cholesky_factor.has_value();
 }
 
+std::span<const double> Subnetwork::stationary_weights() const {
+    if (solver_ && !solver_->weights.empty()) {
+        return solver_->weights;
+    }
+    return {};
+}
+
 const num::Vector &Subnetwork::inverse_column_sums() const {
     return solver_->inverse_column_sums();
 }
