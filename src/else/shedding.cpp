@@ -26,7 +26,6 @@ std::vector<double> compute_expected_visits_losses(const Subnetwork &subnetwork,
     return losses;
 }
 
-// Method 2: Symmetrized Operator Diagonal Approximation
 // Method 2: Steady-State Normalized Symmetrized Operator
 // S_tilde = 0.5 * (H (-R) H^-1 + H^-1 (-R)^T H) with H = diag(sqrt(pi))
 std::vector<double> compute_symmetrized_losses(const Subnetwork &subnetwork,
