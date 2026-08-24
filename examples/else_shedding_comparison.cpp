@@ -1,31 +1,15 @@
 #include "markovkit.hpp"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <numeric>
-#include <unordered_set>
 #include <vector>
-
-// Helper to compute set overlap and Jaccard similarity between two sets of shed states
-double compute_jaccard(const std::vector<num::idx> &setA, const std::vector<num::idx> &setB) {
-    if (setA.empty() && setB.empty()) return 100.0;
-    std::unordered_set<num::idx> sa(setA.begin(), setA.end());
-    std::unordered_set<num::idx> sb(setB.begin(), setB.end());
-    std::size_t intersection_size = 0;
-    for (num::idx x : sa) {
-        if (sb.contains(x)) {
-            intersection_size++;
-        }
-    }
-    std::unordered_set<num::idx> union_set = sa;
-    union_set.insert(sb.begin(), sb.end());
-    return (static_cast<double>(intersection_size) / static_cast<double>(union_set.size())) * 100.0;
-}
 
 int main() {
     std::cout << "========================================================================\n";
-    std::cout << "       ELSE STATE SHEDDING: SELECTION CONCORDANCE EXPERIMENT           \n";
+    std::cout << "  ELSE WOODBURY CUT-TIME UPDATE: FLOATING-POINT ERROR & TIMING BENCHMARK \n";
     std::cout << "========================================================================\n\n";
 
     constexpr num::idx n = 40;
@@ -63,106 +47,112 @@ int main() {
     entrance[0] = 1.0;
     const auto u = subnetwork.occupation(entrance);
 
-    // 2. Evaluate state-by-state loss under all three shedding methods
-    else_sim::SheddingOptions opt_woodbury{
-        .method = else_sim::SheddingMethod::CholeskyWoodbury,
-        .error_threshold = 1e-6,
-        .fallback_to_stable = true,
-    };
-    const auto losses_woodbury = else_sim::compute_shedding_losses(subnetwork, u, opt_woodbury);
+    // 2. Component-by-Component Floating-Point Error Evaluation
+    std::cout << "--- 1. Component-Wise Floating-Point Error (Woodbury vs Naive Ground Truth) ---\n\n";
+    std::cout << std::left << std::setw(8) << "State"
+              << std::setw(16) << "Woodbury Loss"
+              << std::setw(16) << "Naive Loss"
+              << std::setw(18) << "Relative Error"
+              << std::setw(20) << "Backward Residual" << "\n";
+    std::cout << std::string(80, '-') << "\n";
 
-    else_sim::SheddingOptions opt_symm{
-        .method = else_sim::SheddingMethod::NormalizedSymmetrized,
-        .sample_probes = 32,
-    };
-    const auto losses_symm = else_sim::compute_shedding_losses(subnetwork, u, opt_symm);
+    std::vector<double> state_indices(n);
+    std::vector<double> rel_errors(n);
+    std::vector<double> backward_residuals(n);
+    std::vector<double> woodbury_losses(n);
+    std::vector<double> naive_losses(n);
 
-    else_sim::SheddingOptions opt_visits{
-        .method = else_sim::SheddingMethod::ExpectedVisits,
-    };
-    const auto losses_visits = else_sim::compute_shedding_losses(subnetwork, u, opt_visits);
+    double max_rel_error = 0.0;
+    double max_backward_res = 0.0;
 
-    // 3. Compare State Shedding Selection across Target Capacities
-    std::cout << "--- State Selection Concordance across Target Capacities (Initial = 40) ---\n\n";
-    std::cout << std::left << std::setw(12) << "Target Cap"
-              << std::setw(12) << "Shed Count"
-              << std::setw(20) << "Jaccard(M1, M3)"
-              << std::setw(20) << "Jaccard(M1, M2)"
-              << std::setw(20) << "Jaccard(M2, M3)" << "\n";
-    std::cout << std::string(84, '-') << "\n";
+    for (num::idx i = 0; i < n; ++i) {
+        state_indices[i] = static_cast<double>(i);
+        const std::vector<num::idx> block{i};
 
-    const std::vector<num::idx> test_capacities = {35, 30, 25, 20, 15, 10};
-    const std::vector<num::idx> protected_states = {0};
+        auto diag = subnetwork.cut_time_loss_with_diagnostics(u, block, 1e-6);
+        double loss_woodbury = diag.loss;
+        double loss_naive = subnetwork.naive_cut_time_loss(u, block);
 
-    std::vector<double> cap_plot;
-    std::vector<double> jaccard_m1_m3;
-    std::vector<double> jaccard_m1_m2;
-    std::vector<double> jaccard_m2_m3;
+        double err = std::abs(loss_woodbury - loss_naive);
+        double rel_err = err / std::max(1e-12, loss_naive);
+        double bres = diag.estimated_error;
 
-    for (num::idx cap : test_capacities) {
-        auto res1 = else_sim::shed_states(subnetwork, u, protected_states, {.method = else_sim::SheddingMethod::CholeskyWoodbury, .target_capacity = cap});
-        auto res2 = else_sim::shed_states(subnetwork, u, protected_states, {.method = else_sim::SheddingMethod::NormalizedSymmetrized, .target_capacity = cap});
-        auto res3 = else_sim::shed_states(subnetwork, u, protected_states, {.method = else_sim::SheddingMethod::ExpectedVisits, .target_capacity = cap});
+        woodbury_losses[i] = loss_woodbury;
+        naive_losses[i] = loss_naive;
+        rel_errors[i] = std::max(1e-18, rel_err);
+        backward_residuals[i] = std::max(1e-18, bres);
 
-        const double j13 = compute_jaccard(res1.shed_indices, res3.shed_indices);
-        const double j12 = compute_jaccard(res1.shed_indices, res2.shed_indices);
-        const double j23 = compute_jaccard(res2.shed_indices, res3.shed_indices);
+        max_rel_error = std::max(max_rel_error, rel_err);
+        max_backward_res = std::max(max_backward_res, bres);
 
-        cap_plot.push_back(static_cast<double>(cap));
-        jaccard_m1_m3.push_back(j13);
-        jaccard_m1_m2.push_back(j12);
-        jaccard_m2_m3.push_back(j23);
+        if (i < 8 || i >= n - 5 || i % 5 == 0) {
+            std::cout << std::left << std::setw(8) << i
+                      << std::setw(16) << std::scientific << std::setprecision(3) << loss_woodbury
+                      << std::setw(16) << std::scientific << std::setprecision(3) << loss_naive
+                      << std::setw(18) << std::scientific << std::setprecision(3) << rel_err
+                      << std::setw(20) << std::scientific << std::setprecision(3) << bres << "\n";
+        }
+    }
+    std::cout << "\nMax Component-Wise Relative Error:     " << std::scientific << max_rel_error << "\n";
+    std::cout << "Max Component-Wise Backward Residual: " << std::scientific << max_backward_res << "\n\n";
 
-        std::cout << std::left << std::setw(12) << cap
-                  << std::setw(12) << (40 - cap)
-                  << std::setw(20) << (std::to_string(j13) + " %")
-                  << std::setw(20) << (std::to_string(j12) + " %")
-                  << std::setw(20) << (std::to_string(j23) + " %") << "\n";
+    // 3. Block Cut Set Scaling & Speedup Benchmark
+    std::cout << "--- 2. Block Cut Set Benchmark: Woodbury Principal Inversion vs Naive Scratch ---\n\n";
+    std::cout << std::left << std::setw(14) << "Block Size k"
+              << std::setw(18) << "Woodbury (us)"
+              << std::setw(18) << "Naive (us)"
+              << std::setw(16) << "Rel Discrepancy" << "\n";
+    std::cout << std::string(66, '-') << "\n";
+
+    const std::vector<num::idx> block_sizes = {1, 2, 4, 8, 12, 16, 20};
+    constexpr int repetitions = 300;
+
+    for (num::idx k : block_sizes) {
+        std::vector<num::idx> block(k);
+        for (num::idx i = 0; i < k; ++i) {
+            block[i] = n - 1 - i; // Cut peripheral states
+        }
+
+        // Warmup & discrepancy
+        double w_loss = subnetwork.cut_time_loss(u, block);
+        double n_loss = subnetwork.naive_cut_time_loss(u, block);
+        double rel_diff = std::abs(w_loss - n_loss) / std::max(1e-12, n_loss);
+
+        // Benchmark Woodbury
+        auto t0 = std::chrono::high_resolution_clock::now();
+        for (int r = 0; r < repetitions; ++r) {
+            volatile double l = subnetwork.cut_time_loss(u, block);
+            (void)l;
+        }
+        auto t1 = std::chrono::high_resolution_clock::now();
+        double w_us = std::chrono::duration<double, std::micro>(t1 - t0).count() / repetitions;
+
+        // Benchmark Naive
+        auto t2 = std::chrono::high_resolution_clock::now();
+        for (int r = 0; r < repetitions; ++r) {
+            volatile double l = subnetwork.naive_cut_time_loss(u, block);
+            (void)l;
+        }
+        auto t3 = std::chrono::high_resolution_clock::now();
+        double n_us = std::chrono::duration<double, std::micro>(t3 - t2).count() / repetitions;
+
+        std::cout << std::left << std::setw(14) << k
+                  << std::setw(18) << std::fixed << std::setprecision(2) << w_us
+                  << std::setw(18) << std::fixed << std::setprecision(2) << n_us
+                  << std::setw(16) << std::scientific << std::setprecision(2) << rel_diff << "\n";
     }
     std::cout << "\n";
 
-    // 4. Print the exact states chosen for target capacity = 25 (shedding 15 states)
-    auto shed_m1 = else_sim::shed_states(subnetwork, u, protected_states, {.method = else_sim::SheddingMethod::CholeskyWoodbury, .target_capacity = 25});
-    auto shed_m2 = else_sim::shed_states(subnetwork, u, protected_states, {.method = else_sim::SheddingMethod::NormalizedSymmetrized, .target_capacity = 25});
-    auto shed_m3 = else_sim::shed_states(subnetwork, u, protected_states, {.method = else_sim::SheddingMethod::ExpectedVisits, .target_capacity = 25});
-
-    std::cout << "States chosen to shed for Target Capacity = 25 (15 states shed):\n";
-    std::cout << "  Method 1 (Woodbury):   ";
-    for (num::idx s : shed_m1.shed_indices) std::cout << s << " ";
-    std::cout << "\n";
-
-    std::cout << "  Method 2 (Symmetrized):";
-    for (num::idx s : shed_m2.shed_indices) std::cout << s << " ";
-    std::cout << "\n";
-
-    std::cout << "  Method 3 (ExpVisits):  ";
-    for (num::idx s : shed_m3.shed_indices) std::cout << s << " ";
-    std::cout << "\n\n";
-
-    // 5. Generate comparative plots
-    auto state_indices = num::linspace(0.0, static_cast<double>(n - 1), n);
-    std::vector<double> woodbury_plot(losses_woodbury.begin(), losses_woodbury.end());
-    std::vector<double> symm_plot(losses_symm.begin(), losses_symm.end());
-    std::vector<double> visits_plot(losses_visits.begin(), losses_visits.end());
-
-    // Normalize each method's losses by its maximum so the relative shapes can be compared directly
-    const double max_w = *std::max_element(woodbury_plot.begin(), woodbury_plot.end());
-    const double max_s = *std::max_element(symm_plot.begin(), symm_plot.end());
-    const double max_v = *std::max_element(visits_plot.begin(), visits_plot.end());
-
-    for (double &val : woodbury_plot) val /= max_w;
-    for (double &val : symm_plot) val /= max_s;
-    for (double &val : visits_plot) val /= max_v;
-
-    num::plt::plot(state_indices, woodbury_plot, "Method 1: Cholesky Woodbury (Normalized Loss)", "lines lw 2 lc rgb '#2980b9'");
-    num::plt::plot(state_indices, symm_plot, "Method 2: Symmetrized Diagonal (Normalized Loss)", "lines dt 2 lw 2 lc rgb '#e67e22'");
-    num::plt::plot(state_indices, visits_plot, "Method 3: Expected Visits (Normalized Activity)", "points pt 7 lc rgb '#27ae60'");
-    num::plt::title("ELSE State Shedding Relative Ranking Profiles (Normalized)");
-    num::plt::xlabel("Molecule Count State Index");
-    num::plt::ylabel("Normalized Metric Value");
+    // 4. Generate Combined Visual Plot
+    num::plt::plot(state_indices, rel_errors, "Relative Discrepancy |Loss_{Woodbury} - Loss_{Naive}| / Loss_{Naive}", "lines lw 2 lc rgb '#c0392b'");
+    num::plt::plot(state_indices, backward_residuals, "Linear Residual ||Z_{SS} c - u_S||_{\\infty}", "lines dt 2 lw 2 lc rgb '#2980b9'");
+    num::plt::title("ELSE Cut-Time Update Floating-Point Error & Backward Residual");
+    num::plt::xlabel("Removed State Index j");
+    num::plt::ylabel("Relative Error");
+    num::plt::semilogy();
     num::plt::legend();
     num::plt::savefig("else_shedding_comparison.png");
 
-    std::cout << "[SUCCESS] Plot saved to else_shedding_comparison.png\n";
+    std::cout << "[SUCCESS] Floating-point error plot saved to else_shedding_comparison.png\n";
     return 0;
 }

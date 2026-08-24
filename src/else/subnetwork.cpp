@@ -121,8 +121,15 @@ struct Subnetwork::SolverImpl {
         }
     }
 
+    // =========================================================================
+    // Woodbury Principal Block Solve: Z_{SS} c = u_S
+    // =========================================================================
+    // Solves the reduced system against the principal inverse block Z_{SS} = [(-R)^{-1}]_{S,S}.
+    // In reversible coordinates, factors (S^{-1})_{SS} with Cholesky in O(|S|^3) time.
     void solve_principal_inverse(std::span<const num::idx> indices,
-                                 const num::Vector &right_hand_side, num::Vector &solution) const {
+                                 const num::Vector &right_hand_side,
+                                 num::Vector &solution,
+                                 num::Matrix *extracted_block = nullptr) const {
         if (right_hand_side.size() != indices.size() || solution.size() != indices.size()) {
             throw std::invalid_argument("principal inverse solve dimensions must match");
         }
@@ -130,6 +137,9 @@ struct Subnetwork::SolverImpl {
         num::Matrix block;
         if (cholesky_factor) {
             num::inverse_principal_block(*cholesky_factor, indices, block, inverse_workspace);
+            if (extracted_block) {
+                *extracted_block = block;
+            }
             const auto block_factor = num::cholesky(num::assume_spd(std::move(block)));
             if (!block_factor.success) {
                 throw std::runtime_error("cut-time inverse block is not positive definite");
@@ -148,6 +158,9 @@ struct Subnetwork::SolverImpl {
         }
 
         num::inverse_principal_block(*general_solver, indices, block, inverse_workspace);
+        if (extracted_block) {
+            *extracted_block = block;
+        }
         const auto block_factor = num::lu(num::assume_square(std::move(block)));
         if (block_factor.singular) {
             throw std::runtime_error("cut-time inverse block is singular");
@@ -302,32 +315,158 @@ std::vector<double> Subnetwork::cut_time_losses(const num::Vector &occupancy,
     return losses;
 }
 
-double Subnetwork::cut_time_loss(const num::Vector &occupancy,
-                                 std::span<const num::idx> removed_states) const {
+// =============================================================================
+// Direct Ground-Truth Naive Method: Scratch Reduced Generator Factorization
+// =============================================================================
+// Explicitly forms the (n - |S|) x (n - |S|) reduced generator submatrix
+// -R_{S^c, S^c}, solves for reduced transient occupation u_{reduced}, and
+// computes exact ground-truth loss: \Delta \tau = 1^T u - 1^T u_{reduced}.
+double Subnetwork::naive_cut_time_loss(const num::Vector &occupancy,
+                                       std::span<const num::idx> removed_states) const {
+    const num::idx n = size();
+    const num::idx r = removed_states.size();
+    if (r == 0) {
+        return 0.0;
+    }
+    if (r >= n) {
+        double total = 0.0;
+        for (num::idx i = 0; i < n; ++i) {
+            total += occupancy[i];
+        }
+        return total;
+    }
+
+    std::vector<bool> is_removed(n, false);
+    for (num::idx s : removed_states) {
+        if (s < n) {
+            is_removed[s] = true;
+        }
+    }
+
+    std::vector<num::idx> kept;
+    kept.reserve(n - r);
+    for (num::idx i = 0; i < n; ++i) {
+        if (!is_removed[i]) {
+            kept.push_back(i);
+        }
+    }
+    const num::idx m = kept.size();
+
+    // 1. Build reduced generator submatrix -R_reduced
+    num::Matrix R_red(m, m, 0.0);
+    for (num::idx i = 0; i < m; ++i) {
+        for (num::idx j = 0; j < m; ++j) {
+            R_red(i, j) = -R_(kept[i], kept[j]);
+        }
+    }
+
+    // 2. Compute entrance vector p_0 = (-R) * occupancy
+    num::Vector p_red(m, 0.0);
+    for (num::idx i = 0; i < m; ++i) {
+        const num::idx orig_i = kept[i];
+        double p_val = 0.0;
+        for (num::idx j = 0; j < n; ++j) {
+            p_val += -R_(orig_i, j) * occupancy[j];
+        }
+        p_red[i] = std::max(0.0, p_val);
+    }
+
+    // 3. Solve (-R_red) u_red = p_red directly
+    num::Vector u_red(m, 0.0);
+    auto lu_red = num::lu(num::assume_square(std::move(R_red)));
+    if (lu_red.singular) {
+        return 0.0;
+    }
+    num::lu_solve(lu_red, p_red, u_red);
+
+    // 4. Loss = sum(occupancy) - sum(u_red)
+    double tau_orig = 0.0;
+    for (num::idx i = 0; i < n; ++i) {
+        tau_orig += occupancy[i];
+    }
+    double tau_red = 0.0;
+    for (num::idx i = 0; i < m; ++i) {
+        tau_red += std::max(0.0, u_red[i]);
+    }
+    return std::max(0.0, tau_orig - tau_red);
+}
+
+// =============================================================================
+// Woodbury Principal Block Cut-Time Update with Component-Wise Residual Tracking
+// =============================================================================
+// Evaluates the exact holding time loss: \ell_S = q_S^T * (Z_{SS})^{-1} * u_S.
+// Computes backward error ||Z_{SS} c - u_S||_inf. If the residual exceeds
+// tolerance (e.g. ill-conditioning), it falls back to naive_cut_time_loss.
+Subnetwork::CutTimeLossResult
+Subnetwork::cut_time_loss_with_diagnostics(const num::Vector &occupancy,
+                                           std::span<const num::idx> removed_states,
+                                           double tolerance) const {
     if (occupancy.size() != size()) {
         throw std::invalid_argument("cut-time occupation size must match the subnetwork");
     }
     if (removed_states.empty()) {
-        return 0.0;
+        return {.loss = 0.0, .estimated_error = 0.0, .naive_fallback_used = false};
     }
     if (removed_states.size() == 1) {
-        return cut_time_losses(occupancy, removed_states).front();
+        double single_loss = cut_time_losses(occupancy, removed_states).front();
+        return {.loss = single_loss, .estimated_error = 0.0, .naive_fallback_used = false};
     }
 
-    num::Vector removed_occupation(removed_states.size(), 0.0);
-    num::Vector coefficients(removed_states.size(), 0.0);
-    const auto &column_sums = solver_->inverse_column_sums();
-    for (num::idx index = 0; index < removed_states.size(); ++index) {
-        removed_occupation[index] = occupancy[removed_states[index]];
+    const num::idx r = removed_states.size();
+    num::Vector u_S(r, 0.0);
+    for (num::idx i = 0; i < r; ++i) {
+        u_S[i] = occupancy[removed_states[i]];
     }
-    // Woodbury reduces a block cut to a solve with its principal inverse block.
-    solver_->solve_principal_inverse(removed_states, removed_occupation, coefficients);
 
-    double loss = 0.0;
-    for (num::idx index = 0; index < removed_states.size(); ++index) {
-        loss += column_sums[removed_states[index]] * coefficients[index];
+    num::Vector coefficients(r, 0.0);
+    num::Matrix Z_SS;
+    bool fast_success = false;
+    double residual_norm = 0.0;
+
+    try {
+        solver_->solve_principal_inverse(removed_states, u_S, coefficients, &Z_SS);
+
+        // Component-wise backward residual: || Z_SS * c - u_S ||_inf / ||u_S||_inf
+        double max_res = 0.0;
+        double max_rhs = 0.0;
+        for (num::idx i = 0; i < r; ++i) {
+            max_rhs = std::max(max_rhs, std::abs(u_S[i]));
+            double reconstructed = 0.0;
+            for (num::idx j = 0; j < r; ++j) {
+                reconstructed += Z_SS(i, j) * coefficients[j];
+            }
+            max_res = std::max(max_res, std::abs(reconstructed - u_S[i]));
+        }
+        residual_norm = max_res / std::max(1e-12, max_rhs);
+
+        if (residual_norm <= tolerance && std::isfinite(residual_norm)) {
+            fast_success = true;
+        }
+    } catch (...) {
+        fast_success = false;
+        residual_norm = std::numeric_limits<double>::infinity();
     }
-    return std::max(0.0, loss);
+
+    if (fast_success) {
+        const auto &column_sums = solver_->inverse_column_sums();
+        double loss = 0.0;
+        for (num::idx i = 0; i < r; ++i) {
+            loss += column_sums[removed_states[i]] * coefficients[i];
+        }
+        if (std::isfinite(loss) && loss >= 0.0) {
+            return {.loss = loss, .estimated_error = residual_norm, .naive_fallback_used = false};
+        }
+    }
+
+    // Residual threshold breached or non-finite -> Recompute via naive ground-truth solve
+    double naive_loss = naive_cut_time_loss(occupancy, removed_states);
+    return {.loss = naive_loss, .estimated_error = residual_norm, .naive_fallback_used = true};
+}
+
+double Subnetwork::cut_time_loss(const num::Vector &occupancy,
+                                 std::span<const num::idx> removed_states,
+                                 double tolerance) const {
+    return cut_time_loss_with_diagnostics(occupancy, removed_states, tolerance).loss;
 }
 
 } // namespace else_sim

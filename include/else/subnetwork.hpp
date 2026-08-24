@@ -63,9 +63,27 @@ class Subnetwork {
     [[nodiscard]] std::vector<double> cut_time_losses(const num::Vector &occupation,
                                                       std::span<const num::idx> candidates) const;
 
-    // Exact combined loss from removing a state block via the Woodbury formula.
+    /// @brief Result of evaluating cut-time loss with floating-point error tracking.
+    struct CutTimeLossResult {
+        double loss = 0.0;             ///< Mean holding-time loss \f$\Delta \tau = \tau - \tau_{S^c}\f$
+        double estimated_error = 0.0;   ///< Component-wise backward residual \f$\|Z_{SS} c - u_S\|_\infty\f$
+        bool naive_fallback_used = false; ///< True if naive reduced scratch refactor was used
+    };
+
+    /// @brief Exact combined loss from removing a state block via the Woodbury formula,
+    /// with automatic component-wise residual tracking and fallback to the naive reduced solve.
     [[nodiscard]] double cut_time_loss(const num::Vector &occupation,
-                                       std::span<const num::idx> removed_states) const;
+                                       std::span<const num::idx> removed_states,
+                                       double tolerance = 1e-6) const;
+
+    /// @brief Detailed cut-time loss evaluation returning loss, floating-point error, and fallback diagnostics.
+    [[nodiscard]] CutTimeLossResult cut_time_loss_with_diagnostics(
+        const num::Vector &occupation, std::span<const num::idx> removed_states,
+        double tolerance = 1e-6) const;
+
+    /// @brief Direct ground-truth naive method: refactorizes the reduced generator from scratch.
+    [[nodiscard]] double naive_cut_time_loss(const num::Vector &occupation,
+                                             std::span<const num::idx> removed_states) const;
 
   private:
     void initialize(cme::RestrictedGenerator restricted);

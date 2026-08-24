@@ -123,7 +123,23 @@ void test_exact_cut_time_losses() {
     assert(std::abs(sub.cut_time_loss(u, std::vector<num::idx>{0, 1}) - 0.8) < 1e-12);
     assert(sub.cut_time_loss(u, std::vector<num::idx>{}) == 0.0);
 
-    std::cout << "[PASS] test_exact_cut_time_losses (Delta T = [0.8, 0.3])\n";
+    // Verify naive ground-truth method matches Woodbury exactly:
+    assert(std::abs(sub.naive_cut_time_loss(u, std::vector<num::idx>{0}) - 0.8) < 1e-12);
+    assert(std::abs(sub.naive_cut_time_loss(u, std::vector<num::idx>{1}) - 0.3) < 1e-12);
+    assert(std::abs(sub.naive_cut_time_loss(u, std::vector<num::idx>{0, 1}) - 0.8) < 1e-12);
+
+    // Verify diagnostics and component-wise backward error:
+    auto diag_fast = sub.cut_time_loss_with_diagnostics(u, std::vector<num::idx>{0, 1}, 1e-6);
+    assert(std::abs(diag_fast.loss - 0.8) < 1e-12);
+    assert(diag_fast.estimated_error < 1e-12);
+    assert(!diag_fast.naive_fallback_used);
+
+    // Verify forced naive fallback on strict negative tolerance:
+    auto diag_naive = sub.cut_time_loss_with_diagnostics(u, std::vector<num::idx>{0, 1}, -1.0);
+    assert(std::abs(diag_naive.loss - 0.8) < 1e-12);
+    assert(diag_naive.naive_fallback_used);
+
+    std::cout << "[PASS] test_exact_cut_time_losses (Delta T = [0.8, 0.3], Woodbury vs Naive exact match)\n";
 }
 
 void test_laplacian_column_sum_property() {
