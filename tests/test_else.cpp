@@ -166,7 +166,7 @@ void test_laplacian_trajectory_uses_reversible_solver() {
     assert(path.times.back() > path.times.front());
 }
 
-void test_two_step_talbot_density() {
+void test_two_step_laplace_density() {
     // Two-step chain:
     // Step 0: State {0}, generator R = [-2], exit edge to {1} with rate 2.0
     // Step 1: State {1}, generator R = [-3], exit edge to {2} with rate 3.0
@@ -182,11 +182,18 @@ void test_two_step_talbot_density() {
     step1.generator = num::SparseMatrix::from_triplets(1, 1, {0}, {0}, {-3.0});
     step1.boundary.push_back({0, {2}, 3.0});
 
-    else_sim::TalbotDensitySolver solver({std::move(step0), std::move(step1)});
+    else_sim::LaplaceDensitySolver solver({std::move(step0), std::move(step1)});
     assert(solver.states().size() == 2);
 
     double t = 1.0;
-    auto sol = solver.solve(markovkit::State{0}, t, 20);
+    bool observer_called = false;
+    auto observer = [&](const else_sim::ContourNodeStatus &status) {
+        if (status.node_index == 0) {
+            observer_called = true;
+        }
+    };
+    auto sol = solver.solve(markovkit::State{0}, t, 20, observer);
+    assert(observer_called);
 
     // Analytical solution for sequential transition 0 -> 1 -> 2:
     // p0(t) = exp(-2*t)
@@ -200,7 +207,7 @@ void test_two_step_talbot_density() {
     assert(std::abs(sol.probability[0] - norm_p0) < 1e-4);
     assert(std::abs(sol.probability[1] - norm_p1) < 1e-4);
 
-    std::cout << "[PASS] test_two_step_talbot_density\n";
+    std::cout << "[PASS] test_two_step_laplace_density\n";
 }
 
 markovkit::ReactionSystem birth_death_model() {
@@ -249,15 +256,113 @@ void test_trajectory_step_limit() {
     assert(path.times.back() < 100.0);
 }
 
+void test_shedding_three_methods_comparison() {
+    cme::StateSpace sp;
+    for (int s = 0; s < 10; ++s) {
+        sp.add_state({s});
+    }
+
+    const auto model = birth_death_model();
+    const std::vector<double> rates{4.0, 1.0};
+    auto restricted = cme::restrict_cme(sp, model, rates);
+
+    std::vector<double> h(10, 1.0);
+    for (num::idx i = 1; i < 10; ++i) {
+        h[i] = h[i - 1] * std::sqrt(4.0 / static_cast<double>(i));
+    }
+    auto reversible = cme::reversible_generator(std::move(restricted), h);
+    else_sim::Subnetwork sub(std::move(reversible));
+
+    num::Vector p0(10, 0.0);
+    p0[0] = 1.0;
+    const auto u = sub.occupation(p0);
+
+    // Method 1: Cholesky Woodbury
+    else_sim::SheddingOptions opt1{.method = else_sim::SheddingMethod::CholeskyWoodbury};
+    else_sim::SheddingDiagnostics diag1;
+    const auto loss1 = else_sim::compute_shedding_losses(sub, u, opt1, &diag1);
+
+    // Method 2: Normalized Symmetrized
+    else_sim::SheddingOptions opt2{.method = else_sim::SheddingMethod::NormalizedSymmetrized, .sample_probes = 16};
+    else_sim::SheddingDiagnostics diag2;
+    const auto loss2 = else_sim::compute_shedding_losses(sub, u, opt2, &diag2);
+
+    // Method 3: Expected Visits
+    else_sim::SheddingOptions opt3{.method = else_sim::SheddingMethod::ExpectedVisits};
+    else_sim::SheddingDiagnostics diag3;
+    const auto loss3 = else_sim::compute_shedding_losses(sub, u, opt3, &diag3);
+
+    assert(loss1.size() == 10);
+    assert(loss2.size() == 10);
+    assert(loss3.size() == 10);
+
+    for (num::idx i = 0; i < 10; ++i) {
+        assert(loss1[i] >= 0.0);
+        assert(loss2[i] >= 0.0);
+        assert(loss3[i] >= 0.0);
+        assert(!std::isnan(loss1[i]) && !std::isinf(loss1[i]));
+        assert(!std::isnan(loss2[i]) && !std::isinf(loss2[i]));
+        assert(!std::isnan(loss3[i]) && !std::isinf(loss3[i]));
+    }
+
+    // Shedding down to capacity 5
+    auto result = else_sim::shed_states(sub, u, {0}, {.target_capacity = 5});
+    assert(result.kept_indices.size() == 5);
+    assert(result.shed_indices.size() == 5);
+    // Protected state 0 must be kept
+    assert(std::find(result.kept_indices.begin(), result.kept_indices.end(), 0) != result.kept_indices.end());
+
+    std::cout << "[PASS] test_shedding_three_methods_comparison\n";
+}
+
+void test_shedding_woodbury_error_tracking_and_fallback() {
+    cme::StateSpace sp;
+    for (int s = 0; s < 8; ++s) {
+        sp.add_state({s});
+    }
+
+    const auto model = birth_death_model();
+    const std::vector<double> rates{3.0, 1.0};
+    else_sim::Subnetwork sub(cme::restrict_cme(sp, model, rates));
+
+    num::Vector p0(8, 0.0);
+    p0[0] = 1.0;
+    const auto u = sub.occupation(p0);
+
+    // Force error threshold breach to test fallback
+    else_sim::SheddingOptions opt{
+        .method = else_sim::SheddingMethod::CholeskyWoodbury,
+        .error_threshold = -1.0, // Always triggers fallback
+        .fallback_to_stable = true,
+    };
+    else_sim::SheddingDiagnostics diag;
+    const auto losses = else_sim::compute_shedding_losses(sub, u, opt, &diag);
+
+    assert(losses.size() == 8);
+    assert(diag.fallback_triggered);
+    assert(diag.effective_method == else_sim::SheddingMethod::NormalizedSymmetrized);
+
+    // Test in-place StateSpace pruning
+    std::unordered_set<markovkit::State> protected_states{markovkit::State{0}};
+    else_sim::prune_state_space(sp, sub, p0, protected_states, {.target_capacity = 4});
+    assert(sp.size() == 4);
+    assert(sp.find(markovkit::State{0}) >= 0);
+
+    std::cout << "[PASS] test_shedding_woodbury_error_tracking_and_fallback\n";
+}
+
 int main() {
     test_subnetwork_occupation_integrals_and_exit_law();
     test_exact_cut_time_losses();
     test_laplacian_column_sum_property();
     test_laplacian_trajectory_uses_reversible_solver();
-    test_two_step_talbot_density();
+    test_two_step_laplace_density();
     test_single_trajectory_uses_ensemble();
     test_density_respects_capacity();
     test_trajectory_step_limit();
+    test_shedding_three_methods_comparison();
+    test_shedding_woodbury_error_tracking_and_fallback();
     std::cout << "All ELSE tests passed.\n";
     return 0;
 }
+

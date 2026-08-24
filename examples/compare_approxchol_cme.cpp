@@ -40,63 +40,64 @@ int main() {
         const double death = 1.0;
 
         for (num::idx i = 0; i + 1 < n; ++i) {
-            double w = std::sqrt(birth * death * (i + 1));
+            double w = std::sqrt((i + 1) * birth * death);
             approxchol::add_edge(G, i, i + 1, w);
         }
         G[0].push_back({0, 1.0, 1});
         G[n - 1].push_back({n - 1, 1.0, 1});
 
-        num::Matrix A_dense(n, n, 0.0);
+        num::Matrix a_dense(n, n, 0.0);
         for (num::idx u = 0; u < n; ++u) {
             double diag = 0.0;
             for (const auto &e : G[u]) {
                 if (e.to != u) {
-                    A_dense(u, e.to) -= e.weight;
+                    a_dense(u, e.to) -= e.weight;
                 }
                 diag += e.weight;
             }
-            A_dense(u, u) = diag;
+            a_dense(u, u) = diag;
         }
 
         num::Vector x_exact(n, 1.0);
         num::Vector b(n, 0.0);
         for (num::idx i = 0; i < n; ++i) {
             for (num::idx j = 0; j < n; ++j) {
-                b[i] += A_dense(i, j) * x_exact[j];
+                b[i] += a_dense(i, j) * x_exact[j];
             }
         }
 
-        num::operators::SPDOp<num::operators::DenseOp> A_op{num::operators::DenseOp(A_dense)};
+        num::operators::SPDOp<num::operators::DenseOp> A_op{num::operators::DenseOp(a_dense)};
 
         if (n <= 2000) {
             auto t0 = std::chrono::high_resolution_clock::now();
-            auto factor = num::cholesky(num::linalg::assume_spd(A_dense));
+            auto factor = num::cholesky(num::linalg::assume_spd(a_dense));
             num::Vector x_dense(n, 0.0);
             num::cholesky_solve(factor, b, x_dense);
             auto t1 = std::chrono::high_resolution_clock::now();
             double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-            std::cout << "  Dense Cholesky : " << std::fixed << std::setprecision(2) << ms << " ms\n";
+            std::cout << "  Dense Cholesky : " << std::fixed << std::setprecision(2) << ms
+                      << " ms\n";
         }
 
         {
             num::Vector x_cg(n, 0.0);
             auto t0 = std::chrono::high_resolution_clock::now();
-            auto res = num::cg(A_dense, b, x_cg, 1e-8, 20000);
+            auto res = num::cg(a_dense, b, x_cg, 1e-8, 20000);
             auto t1 = std::chrono::high_resolution_clock::now();
             double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-            std::cout << "  Unprecond CG   : " << std::fixed << std::setprecision(2) << ms << " ms ("
-                      << res.iterations << " iters)\n";
+            std::cout << "  Unprecond CG   : " << std::fixed << std::setprecision(2) << ms
+                      << " ms (" << res.iterations << " iters)\n";
         }
 
         {
-            auto jacobi = num::jacobi_preconditioner(A_dense);
+            auto jacobi = num::jacobi_preconditioner(a_dense);
             num::Vector x_jacobi(n, 0.0);
             auto t0 = std::chrono::high_resolution_clock::now();
             auto res = num::pcg(A_op, jacobi, b, x_jacobi, 1e-8, 20000);
             auto t1 = std::chrono::high_resolution_clock::now();
             double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-            std::cout << "  Jacobi PCG     : " << std::fixed << std::setprecision(2) << ms << " ms ("
-                      << res.iterations << " iters)\n";
+            std::cout << "  Jacobi PCG     : " << std::fixed << std::setprecision(2) << ms
+                      << " ms (" << res.iterations << " iters)\n";
         }
 
         {
@@ -108,8 +109,8 @@ int main() {
             auto res = num::pcg(A_op, prec, b, x_ac, 1e-8, 1000);
             auto t1 = std::chrono::high_resolution_clock::now();
             double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-            std::cout << "  ApproxChol PCG : " << std::fixed << std::setprecision(2) << ms << " ms ("
-                      << res.iterations << " iters)\n";
+            std::cout << "  ApproxChol PCG : " << std::fixed << std::setprecision(2) << ms
+                      << " ms (" << res.iterations << " iters)\n";
         }
     }
 

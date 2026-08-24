@@ -55,11 +55,11 @@ struct TalbotDensitySolver::Impl {
 
     std::vector<DensitySolution>
     solve(const std::vector<std::map<markovkit::State, double>> &initial, double time,
-          num::idx nodes) {
+          num::TalbotQuadrature contour, const ContourObserver &observer = nullptr) {
         if (!(time > 0.0)) {
             throw std::invalid_argument("Talbot density time must be positive");
         }
-        if (nodes < 2 || nodes % 2 != 0) {
+        if (contour.modes < 2 || contour.modes % 2 != 0) {
             throw std::invalid_argument("Talbot node count must be positive and even");
         }
 
@@ -80,7 +80,17 @@ struct TalbotDensitySolver::Impl {
                                                                     num::cplx(0.0, 0.0)));
         }
 
-        num::inverse_laplace_accumulate(time, nodes, [&](num::cplx shift, num::cplx weight) {
+        num::idx current_node = 0;
+        contour.accumulate(time, [&](num::cplx shift, num::cplx weight) {
+            if (observer) {
+                observer(ContourNodeStatus{
+                    .time = time,
+                    .node_index = current_node++,
+                    .total_nodes = contour.modes,
+                    .shift = shift,
+                });
+            }
+
             // Each contour node starts with empty inter-subnetwork arrivals.
             for (std::size_t s = 0; s < subnetworks.size(); ++s) {
                 for (std::size_t sample = 0; sample < n_samples; ++sample) {
@@ -144,37 +154,53 @@ struct TalbotDensitySolver::Impl {
     std::vector<std::vector<BoundaryTransfer>> transfers;
 };
 
-TalbotDensitySolver::TalbotDensitySolver(std::vector<cme::RestrictedGenerator> subnetworks)
+LaplaceDensitySolver::LaplaceDensitySolver(std::vector<cme::RestrictedGenerator> subnetworks)
     : impl_(std::make_unique<Impl>(std::move(subnetworks))) {}
 
-TalbotDensitySolver::~TalbotDensitySolver() = default;
-TalbotDensitySolver::TalbotDensitySolver(TalbotDensitySolver &&) noexcept = default;
-TalbotDensitySolver &TalbotDensitySolver::operator=(TalbotDensitySolver &&) noexcept = default;
+LaplaceDensitySolver::~LaplaceDensitySolver() = default;
+LaplaceDensitySolver::LaplaceDensitySolver(LaplaceDensitySolver &&) noexcept = default;
+LaplaceDensitySolver &LaplaceDensitySolver::operator=(LaplaceDensitySolver &&) noexcept = default;
 
-const std::vector<markovkit::State> &TalbotDensitySolver::states() const {
+const std::vector<markovkit::State> &LaplaceDensitySolver::states() const {
     return impl_->states;
 }
 
-DensitySolution TalbotDensitySolver::solve(const markovkit::State &initial, double time,
-                                           num::idx nodes) {
-    return solve(std::map<markovkit::State, double>{{initial, 1.0}}, time, nodes);
+DensitySolution LaplaceDensitySolver::solve(const markovkit::State &initial, double time,
+                                           num::idx nodes, ContourObserver observer) {
+    return solve(std::map<markovkit::State, double>{{initial, 1.0}}, time, nodes, std::move(observer));
 }
 
-DensitySolution TalbotDensitySolver::solve(const std::map<markovkit::State, double> &initial,
-                                           double time, num::idx nodes) {
-    return impl_->solve({initial}, time, nodes).front();
+DensitySolution LaplaceDensitySolver::solve(const markovkit::State &initial, double time,
+                                           ContourOptions options, ContourObserver observer) {
+    return solve(initial, time, options.nodes, std::move(observer));
+}
+
+DensitySolution LaplaceDensitySolver::solve(const std::map<markovkit::State, double> &initial,
+                                           double time, num::idx nodes, ContourObserver observer) {
+    return impl_->solve({initial}, time, num::TalbotQuadrature{nodes}, observer).front();
+}
+
+DensitySolution LaplaceDensitySolver::solve(const std::map<markovkit::State, double> &initial,
+                                           double time, ContourOptions options, ContourObserver observer) {
+    return solve(initial, time, options.nodes, std::move(observer));
 }
 
 std::vector<DensitySolution>
-TalbotDensitySolver::solve(const std::vector<markovkit::State> &initial_states, double time,
-                           num::idx nodes) {
+LaplaceDensitySolver::solve(const std::vector<markovkit::State> &initial_states, double time,
+                           num::idx nodes, ContourObserver observer) {
     // Convert point masses to the shared batched representation.
     std::vector<std::map<markovkit::State, double>> initial;
     initial.reserve(initial_states.size());
     for (const auto &state : initial_states) {
         initial.push_back({{state, 1.0}});
     }
-    return impl_->solve(initial, time, nodes);
+    return impl_->solve(initial, time, num::TalbotQuadrature{nodes}, observer);
+}
+
+std::vector<DensitySolution>
+LaplaceDensitySolver::solve(const std::vector<markovkit::State> &initial_states, double time,
+                           ContourOptions options, ContourObserver observer) {
+    return solve(initial_states, time, options.nodes, std::move(observer));
 }
 
 } // namespace else_sim

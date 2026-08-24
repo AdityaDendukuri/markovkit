@@ -207,6 +207,14 @@ int Subnetwork::find(const markovkit::State &x) const {
     return it != index_.end() ? it->second : -1;
 }
 
+bool Subnetwork::is_reversible() const {
+    return solver_ && solver_->cholesky_factor.has_value();
+}
+
+const num::Vector &Subnetwork::inverse_column_sums() const {
+    return solver_->inverse_column_sums();
+}
+
 num::Vector Subnetwork::occupation(const num::Vector &start) const {
     // Solving -R u = p0 integrates the transient state probabilities.
     num::Vector u(size(), 0.0);

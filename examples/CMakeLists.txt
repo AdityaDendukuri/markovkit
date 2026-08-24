@@ -37,3 +37,12 @@ target_include_directories(compare_approxchol_cme PRIVATE "${CMAKE_CURRENT_SOURC
 
 add_executable(talbot_vs_fsp_laplacian talbot_vs_fsp_laplacian.cpp)
 target_link_libraries(talbot_vs_fsp_laplacian PRIVATE markovkit::markovkit numerics::plot)
+
+add_executable(else_shedding_comparison else_shedding_comparison.cpp)
+target_link_libraries(else_shedding_comparison PRIVATE markovkit::markovkit numerics::plot)
+
+add_executable(else_toggle_switch else_toggle_switch.cpp)
+target_link_libraries(else_toggle_switch PRIVATE markovkit::markovkit numerics::plot)
+
+add_executable(find_switching find_switching.cpp)
+target_link_libraries(find_switching PRIVATE markovkit::markovkit)

@@ -35,6 +35,8 @@ class Subnetwork {
         return boundary_;
     }
     [[nodiscard]] const num::SparseMatrix &generator() const { return R_; }
+    [[nodiscard]] bool is_reversible() const;
+    [[nodiscard]] const num::Vector &inverse_column_sums() const;
 
     [[nodiscard]] int find(const markovkit::State &x) const;
 
