@@ -1,116 +1,70 @@
 /// @file src/else/shedding.cpp
-/// @brief Implementation of the 3-method state shedding framework for ELSE.
+/// @brief Clean mathematical implementation of state space shedding for ELSE.
 #include "else/shedding.hpp"
 #include <algorithm>
 #include <cmath>
-#include <limits>
 #include <numeric>
-#include <random>
 #include <stdexcept>
+#include <unordered_set>
 
 namespace else_sim {
 
 namespace {
 
-// Method 3: Fastest O(n) Expected Visits Approximation
+// Method 3: Fast O(n) Expected Entries / Visits Flow Balance
+// Score: s_j = max(0, w_j * u_j) where w_j = -R_jj
 std::vector<double> compute_expected_visits_losses(const Subnetwork &subnetwork,
                                                    const num::Vector &occupation) {
     const num::idx n = subnetwork.size();
-    const auto &column_sums = subnetwork.inverse_column_sums();
     const auto &R = subnetwork.generator();
     std::vector<double> losses(n, 0.0);
 
     for (num::idx i = 0; i < n; ++i) {
-        const double rate = std::max(1e-12, -R(i, i));
-        // Loss \approx u_i * w_i / (1 / rate) = u_i * w_i * rate
-        const double w_i = (i < column_sums.size()) ? column_sums[i] : (1.0 / rate);
-        losses[i] = std::max(0.0, occupation[i] * w_i * rate);
+        const double w_i = -R(i, i);
+        losses[i] = (w_i > 0.0) ? std::max(0.0, occupation[i] * w_i) : 0.0;
     }
     return losses;
 }
 
-// Method 2: Non-Symmetric Subnetworks — Normalize, Symmetrize, & Sample Diagonal
+// Method 2: Symmetrized Operator Diagonal Approximation
+// S = 0.5 * ((-R) + (-R)^T) with diagonal M-matrix dominance
 std::vector<double> compute_symmetrized_losses(const Subnetwork &subnetwork,
-                                               const num::Vector &occupation,
-                                               const SheddingOptions &options) {
+                                               const num::Vector &occupation) {
     const num::idx n = subnetwork.size();
     const auto &column_sums = subnetwork.inverse_column_sums();
     const auto &R = subnetwork.generator();
 
-    // 1. Construct dense additive symmetrized operator S = 0.5 * ((-R) + (-R)^T)
     num::Matrix S(n, n, 0.0);
     for (num::idx i = 0; i < n; ++i) {
         for (num::idx j = 0; j < n; ++j) {
-            S(i, j) = 0.5 * (-R(i, j) + -R(j, i));
+            S(i, j) = 0.5 * (-R(i, j) - R(j, i));
         }
     }
-
-    // Ensure strict positive definiteness
     for (num::idx i = 0; i < n; ++i) {
-        double off_diag = 0.0;
+        double row_sum = 0.0;
         for (num::idx j = 0; j < n; ++j) {
             if (i != j) {
-                off_diag += std::abs(S(i, j));
+                row_sum += std::abs(S(i, j));
             }
         }
-        S(i, i) = std::max(S(i, i), off_diag + 1e-8);
+        S(i, i) = std::max(S(i, i), row_sum + 1e-6);
     }
 
-    // 2. Extract inverse diagonal d_i = [S^-1]_{ii}
-    std::vector<double> d(n, 1.0);
-    auto chol = num::cholesky(num::linalg::assume_spd(S));
-
-    if (chol.success && (n <= 256 || options.sample_probes == 0)) {
-        // Exact selected inverse solves on Cholesky factor
-        num::Vector e(n, 0.0);
-        num::Vector y(n, 0.0);
-        for (num::idx i = 0; i < n; ++i) {
-            e[i] = 1.0;
-            num::cholesky_solve(chol, e, y);
-            d[i] = std::max(y[i], 1e-14);
-            e[i] = 0.0;
-        }
-    } else if (chol.success && options.sample_probes > 0) {
-        // Stochastic Hutchinson Rademacher diagonal probe sampling
-        const num::idx M = options.sample_probes;
-        std::mt19937_64 rng(42);
-        std::bernoulli_distribution bern(0.5);
-        std::vector<double> d_accum(n, 0.0);
-        num::Vector z(n, 0.0);
-        num::Vector y(n, 0.0);
-
-        for (num::idx m = 0; m < M; ++m) {
-            for (num::idx i = 0; i < n; ++i) {
-                z[i] = bern(rng) ? 1.0 : -1.0;
-            }
-            num::cholesky_solve(chol, z, y);
-            for (num::idx i = 0; i < n; ++i) {
-                d_accum[i] += z[i] * y[i];
-            }
-        }
-
-        for (num::idx i = 0; i < n; ++i) {
-            d[i] = std::max(d_accum[i] / static_cast<double>(M), 1e-14);
-        }
-    } else {
-        // Fallback to LU solves if Cholesky is not strictly positive definite
-        auto lu_factor = num::lu(num::assume_square(S));
-        num::Vector e(n, 0.0);
-        num::Vector y(n, 0.0);
-        for (num::idx i = 0; i < n; ++i) {
-            e[i] = 1.0;
-            num::lu_solve(lu_factor, e, y);
-            d[i] = std::max(y[i], 1e-14);
-            e[i] = 0.0;
-        }
+    auto chol = num::cholesky(num::assume_spd(std::move(S)));
+    if (!chol.success) {
+        return compute_expected_visits_losses(subnetwork, occupation);
     }
 
-    // 3. Compute shedding losses \Delta \tau_i = u_i * w_i / d_i
     std::vector<double> losses(n, 0.0);
+    num::Vector e(n, 0.0);
+    num::Vector z(n, 0.0);
     for (num::idx i = 0; i < n; ++i) {
+        e[i] = 1.0;
+        num::cholesky_solve(chol, e, z);
+        e[i] = 0.0;
+        const double diag = std::max(z[i], 1e-12);
         const double w_i = (i < column_sums.size()) ? column_sums[i] : 1.0;
-        const double d_i = std::max(d[i], 1e-14);
-        losses[i] = std::max(0.0, occupation[i] * (w_i / d_i));
+        losses[i] = std::max(0.0, occupation[i] * (w_i / diag));
     }
     return losses;
 }
@@ -128,13 +82,8 @@ std::vector<double> compute_shedding_losses(const Subnetwork &subnetwork,
 
     SheddingMethod effective = options.method;
     if (effective == SheddingMethod::Auto) {
-        if (subnetwork.is_reversible()) {
-            effective = SheddingMethod::CholeskyWoodbury;
-        } else if (n <= 512) {
-            effective = SheddingMethod::NormalizedSymmetrized;
-        } else {
-            effective = SheddingMethod::ExpectedVisits;
-        }
+        effective = subnetwork.is_reversible() ? SheddingMethod::CholeskyWoodbury
+                                               : SheddingMethod::ExpectedVisits;
     }
 
     if (diagnostics) {
@@ -143,68 +92,56 @@ std::vector<double> compute_shedding_losses(const Subnetwork &subnetwork,
         diagnostics->initial_states = n;
         diagnostics->initial_mean_exit_time = 0.0;
         for (num::idx i = 0; i < n; ++i) {
-            diagnostics->initial_mean_exit_time += occupation[i];
+            diagnostics->initial_mean_exit_time += std::max(0.0, occupation[i]);
         }
     }
 
-    // Method 1: Cholesky Woodbury with floating-point error tracking & fallback
+    // Method 1: Exact Woodbury cut-time loss via selected inverse diagonal
     if (effective == SheddingMethod::CholeskyWoodbury) {
         try {
             auto losses = subnetwork.cut_time_losses(occupation);
-            double max_err = 0.0;
-            bool numeric_issue = false;
-
+            bool has_invalid = false;
             for (num::idx i = 0; i < n; ++i) {
-                if (std::isnan(losses[i]) || std::isinf(losses[i]) || losses[i] < 0.0) {
-                    numeric_issue = true;
-                    max_err = std::max(max_err, 1.0);
+                if (!std::isfinite(losses[i]) || losses[i] < 0.0) {
+                    has_invalid = true;
                     break;
                 }
             }
-
-            if (diagnostics) {
-                diagnostics->max_floating_point_error = max_err;
-            }
-
-            if (!numeric_issue && max_err <= options.error_threshold) {
+            if (!has_invalid) {
                 return losses;
             }
-
-            // Numeric issue or error threshold breached -> Trigger Graceful Fallback
             if (options.fallback_to_stable) {
                 if (diagnostics) {
                     diagnostics->fallback_triggered = true;
-                    diagnostics->fallback_reason =
-                        "Woodbury conditioning or non-finite values detected";
+                    diagnostics->fallback_reason = "Non-finite values in Woodbury cut-time loss";
                     diagnostics->effective_method = SheddingMethod::NormalizedSymmetrized;
                 }
-                return compute_symmetrized_losses(subnetwork, occupation, options);
+                return compute_symmetrized_losses(subnetwork, occupation);
             }
             return losses;
         } catch (const std::exception &ex) {
             if (options.fallback_to_stable) {
                 if (diagnostics) {
                     diagnostics->fallback_triggered = true;
-                    diagnostics->fallback_reason = std::string("Woodbury solve threw: ") + ex.what();
+                    diagnostics->fallback_reason = ex.what();
                     diagnostics->effective_method = SheddingMethod::NormalizedSymmetrized;
                 }
-                return compute_symmetrized_losses(subnetwork, occupation, options);
+                return compute_symmetrized_losses(subnetwork, occupation);
             }
             throw;
         }
     }
 
-    // Method 2: Symmetrization and diagonal sampling
+    // Method 2: Symmetrization and diagonal extraction
     if (effective == SheddingMethod::NormalizedSymmetrized) {
-        return compute_symmetrized_losses(subnetwork, occupation, options);
+        return compute_symmetrized_losses(subnetwork, occupation);
     }
 
-    // Method 3: Expected visits
+    // Method 3: Expected visits / entries
     return compute_expected_visits_losses(subnetwork, occupation);
 }
 
-SheddingResult shed_states(const Subnetwork &subnetwork,
-                           const num::Vector &occupation,
+SheddingResult shed_states(const Subnetwork &subnetwork, const num::Vector &occupation,
                            const std::vector<num::idx> &protected_states,
                            const SheddingOptions &options) {
     const num::idx n = subnetwork.size();
@@ -225,19 +162,17 @@ SheddingResult shed_states(const Subnetwork &subnetwork,
         return result;
     }
 
-    // Identify eligible candidates (unprotected states)
-    std::vector<num::idx> candidate_indices;
+    std::vector<num::idx> candidates;
     for (num::idx i = 0; i < n; ++i) {
         if (!protected_set.contains(i)) {
-            candidate_indices.push_back(i);
+            candidates.push_back(i);
         }
     }
 
-    // Sort candidates by ascending estimated exit-time loss
-    std::sort(candidate_indices.begin(), candidate_indices.end(),
-              [&](num::idx a, num::idx b) { return result.state_losses[a] < result.state_losses[b]; });
+    std::sort(candidates.begin(), candidates.end(), [&](num::idx a, num::idx b) {
+        return result.state_losses[a] < result.state_losses[b];
+    });
 
-    // Determine how many states to remove
     num::idx target_capacity = options.target_capacity;
     if (target_capacity == 0 || target_capacity > n) {
         target_capacity = n;
@@ -247,13 +182,13 @@ SheddingResult shed_states(const Subnetwork &subnetwork,
     }
 
     const num::idx needed_removals = (n > target_capacity) ? (n - target_capacity) : 0;
-    const double total_mean_exit_time = result.diagnostics.initial_mean_exit_time;
-    const double max_allowable_loss = options.tolerance * std::max(1e-12, total_mean_exit_time);
+    const double total_exit_time = result.diagnostics.initial_mean_exit_time;
+    const double max_allowable_loss = options.tolerance * std::max(1e-12, total_exit_time);
 
     std::unordered_set<num::idx> remove_set;
     double accumulated_loss = 0.0;
 
-    for (num::idx candidate : candidate_indices) {
+    for (num::idx candidate : candidates) {
         const double loss = result.state_losses[candidate];
         const bool needed_for_capacity = (remove_set.size() < needed_removals);
         const bool allowed_by_tolerance = (accumulated_loss + loss <= max_allowable_loss);
@@ -261,7 +196,7 @@ SheddingResult shed_states(const Subnetwork &subnetwork,
         if (needed_for_capacity || (options.target_capacity == 0 && allowed_by_tolerance)) {
             remove_set.insert(candidate);
             accumulated_loss += loss;
-            if (remove_set.size() >= candidate_indices.size()) {
+            if (remove_set.size() >= candidates.size()) {
                 break;
             }
         }
@@ -278,18 +213,15 @@ SheddingResult shed_states(const Subnetwork &subnetwork,
     result.diagnostics.shed_states = result.shed_indices.size();
     result.diagnostics.remaining_states = result.kept_indices.size();
     result.diagnostics.total_estimated_loss = accumulated_loss;
-    result.diagnostics.relative_loss =
-        accumulated_loss / std::max(1e-12, total_mean_exit_time);
+    result.diagnostics.relative_loss = accumulated_loss / std::max(1e-12, total_exit_time);
 
     return result;
 }
 
-void prune_state_space(cme::StateSpace &states,
-                       const Subnetwork &subnetwork,
+void prune_state_space(cme::StateSpace &states, const Subnetwork &subnetwork,
                        const num::Vector &entrance,
                        const std::unordered_set<markovkit::State> &protected_states,
-                       const SheddingOptions &options,
-                       SheddingDiagnostics *diagnostics) {
+                       const SheddingOptions &options, SheddingDiagnostics *diagnostics) {
     const num::idx n = subnetwork.size();
     if (states.size() != static_cast<int>(n)) {
         throw std::invalid_argument("state space size does not match subnetwork size");

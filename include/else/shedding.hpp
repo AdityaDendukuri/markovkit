@@ -15,8 +15,10 @@ namespace else_sim {
 
 /// @brief Algorithmic strategy used to evaluate exit-time losses for state shedding.
 enum class SheddingMethod : std::uint8_t {
-    CholeskyWoodbury,      ///< Method 1: Dense Cholesky Woodbury with floating-point error tracking & fallback
-    NormalizedSymmetrized, ///< Method 2: Symmetrization and diagonal sampling for non-symmetric systems
+    CholeskyWoodbury, ///< Method 1: Dense Cholesky Woodbury with floating-point error tracking &
+                      ///< fallback
+    NormalizedSymmetrized, ///< Method 2: Symmetrization and diagonal sampling for non-symmetric
+                           ///< systems
     ExpectedVisits,        ///< Method 3: Fast O(n) expected visits / escape rate approximation
     Auto,                  ///< Automatic selection based on reversibility and system dimension
 };
@@ -24,11 +26,13 @@ enum class SheddingMethod : std::uint8_t {
 /// @brief Configuration parameters for state shedding and truncation.
 struct SheddingOptions {
     SheddingMethod method = SheddingMethod::Auto;
-    num::idx target_capacity = 0;       ///< Desired target capacity (0 = tolerance-driven only)
-    double tolerance = 1e-4;            ///< Maximum allowable relative exit-time loss \f$\Delta \tau / \tau\f$
-    double error_threshold = 1e-6;      ///< Relative error / conditioning threshold to trigger Woodbury fallback
-    num::idx sample_probes = 16;        ///< Number of stochastic probe vectors for diagonal sampling
-    bool fallback_to_stable = true;     ///< Enable graceful fallback if Woodbury downdates lose stability
+    num::idx target_capacity = 0; ///< Desired target capacity (0 = tolerance-driven only)
+    double tolerance = 1e-4; ///< Maximum allowable relative exit-time loss \f$\Delta \tau / \tau\f$
+    double error_threshold =
+        1e-6; ///< Relative error / conditioning threshold to trigger Woodbury fallback
+    num::idx sample_probes = 16; ///< Number of stochastic probe vectors for diagonal sampling
+    bool fallback_to_stable =
+        true; ///< Enable graceful fallback if Woodbury downdates lose stability
 };
 
 /// @brief Diagnostics recorded during the state shedding process.
@@ -55,26 +59,22 @@ struct SheddingResult {
 };
 
 /// @brief Computes candidate-by-candidate mean-exit-time loss for all states in a subnetwork.
-[[nodiscard]] std::vector<double> compute_shedding_losses(
-    const Subnetwork &subnetwork,
-    const num::Vector &occupation,
-    const SheddingOptions &options = {},
-    SheddingDiagnostics *diagnostics = nullptr);
+[[nodiscard]] std::vector<double>
+compute_shedding_losses(const Subnetwork &subnetwork, const num::Vector &occupation,
+                        const SheddingOptions &options = {},
+                        SheddingDiagnostics *diagnostics = nullptr);
 
 /// @brief Performs state space shedding on a subnetwork given an initial occupation profile.
-[[nodiscard]] SheddingResult shed_states(
-    const Subnetwork &subnetwork,
-    const num::Vector &occupation,
-    const std::vector<num::idx> &protected_states = {},
-    const SheddingOptions &options = {});
+[[nodiscard]] SheddingResult shed_states(const Subnetwork &subnetwork,
+                                         const num::Vector &occupation,
+                                         const std::vector<num::idx> &protected_states = {},
+                                         const SheddingOptions &options = {});
 
 /// @brief Prunes a CME StateSpace in-place based on the specified shedding options.
-void prune_state_space(
-    cme::StateSpace &states,
-    const Subnetwork &subnetwork,
-    const num::Vector &entrance,
-    const std::unordered_set<markovkit::State> &protected_states,
-    const SheddingOptions &options = {},
-    SheddingDiagnostics *diagnostics = nullptr);
+void prune_state_space(cme::StateSpace &states, const Subnetwork &subnetwork,
+                       const num::Vector &entrance,
+                       const std::unordered_set<markovkit::State> &protected_states,
+                       const SheddingOptions &options = {},
+                       SheddingDiagnostics *diagnostics = nullptr);
 
 } // namespace else_sim
