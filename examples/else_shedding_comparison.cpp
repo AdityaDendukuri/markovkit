@@ -53,14 +53,17 @@ int main() {
               << std::setw(16) << "Woodbury Loss"
               << std::setw(16) << "Naive Loss"
               << std::setw(18) << "Relative Error"
+              << std::setw(20) << "safe_add Bound"
               << std::setw(20) << "Backward Residual" << "\n";
-    std::cout << std::string(80, '-') << "\n";
+    std::cout << std::string(98, '-') << "\n";
 
     std::vector<double> state_indices(n);
     std::vector<double> rel_errors(n);
+    std::vector<double> safe_add_bounds(n);
     std::vector<double> backward_residuals(n);
 
     double max_rel_error = 0.0;
+    double max_safe_add_bound = 0.0;
     double max_backward_res = 0.0;
 
     for (num::idx i = 0; i < n; ++i) {
@@ -75,10 +78,18 @@ int main() {
         double rel_err = err / std::max(1e-12, loss_naive);
         double bres = diag.estimated_error;
 
+        // safe_add precision tracking metric: eps_mach * |loss| / loss
+        double x = loss_woodbury;
+        double acc_err = 0.0;
+        num::safe_add(x, acc_err, 0.0, 1e-6);
+        double safe_bound = acc_err / std::max(1e-12, loss_woodbury);
+
         rel_errors[i] = std::max(1e-18, rel_err);
+        safe_add_bounds[i] = std::max(1e-18, safe_bound);
         backward_residuals[i] = std::max(1e-18, bres);
 
         max_rel_error = std::max(max_rel_error, rel_err);
+        max_safe_add_bound = std::max(max_safe_add_bound, safe_bound);
         max_backward_res = std::max(max_backward_res, bres);
 
         if (i < 8 || i >= n - 5 || i % 5 == 0) {
@@ -86,10 +97,12 @@ int main() {
                       << std::setw(16) << std::scientific << std::setprecision(3) << loss_woodbury
                       << std::setw(16) << std::scientific << std::setprecision(3) << loss_naive
                       << std::setw(18) << std::scientific << std::setprecision(3) << rel_err
+                      << std::setw(20) << std::scientific << std::setprecision(3) << safe_bound
                       << std::setw(20) << std::scientific << std::setprecision(3) << bres << "\n";
         }
     }
     std::cout << "\nMax Component-Wise Relative Error:     " << std::scientific << max_rel_error << "\n";
+    std::cout << "Max safe_add Precision Bound:         " << std::scientific << max_safe_add_bound << "\n";
     std::cout << "Max Component-Wise Backward Residual: " << std::scientific << max_backward_res << "\n\n";
 
     // 3. Block Cut Set Scaling & Speedup Benchmark
@@ -141,10 +154,11 @@ int main() {
 
     // 4. Generate Combined Visual Plot
     num::plt::plot(state_indices, rel_errors, "Relative Discrepancy |Loss_{Woodbury} - Loss_{Naive}| / Loss_{Naive}", "lines lw 2 lc rgb '#c0392b'");
-    num::plt::plot(state_indices, backward_residuals, "Linear Residual ||Z_{SS} c - u_S||_{\\infty}", "lines dt 2 lw 2 lc rgb '#2980b9'");
-    num::plt::title("ELSE Cut-Time Update Floating-Point Error & Backward Residual");
+    num::plt::plot(state_indices, safe_add_bounds, "safe\\_add Precision Bound (\\varepsilon_{mach} |x| / x)", "lines dt 2 lw 2 lc rgb '#27ae60'");
+    num::plt::plot(state_indices, backward_residuals, "Linear Residual ||Z_{SS} c - u_S||_{\\infty}", "lines dt 3 lw 2 lc rgb '#2980b9'");
+    num::plt::title("ELSE Cut-Time Update Precision & Floating-Point Error Metrics");
     num::plt::xlabel("Removed State Index j");
-    num::plt::ylabel("Relative Error");
+    num::plt::ylabel("Relative Precision / Error");
     num::plt::semilogy();
     num::plt::legend();
     num::plt::savefig("else_shedding_comparison.png");
