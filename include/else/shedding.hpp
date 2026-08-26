@@ -17,10 +17,9 @@ namespace else_sim {
 enum class SheddingMethod : std::uint8_t {
     CholeskyWoodbury, ///< Method 1: Dense Cholesky Woodbury with floating-point error tracking &
                       ///< fallback
-    NormalizedSymmetrized, ///< Method 2: Symmetrization and diagonal sampling for non-symmetric
-                           ///< systems
+    NormalizedSymmetrized, ///< Method 2: Symmetrization and exact inverse-diagonal extraction
     ExpectedVisits,        ///< Method 3: Fast O(n) expected visits / escape rate approximation
-    Auto,                  ///< Automatic selection based on reversibility and system dimension
+    Auto,                  ///< Exact cut time when reversible; expected visits otherwise
 };
 
 /// @brief Configuration parameters for state shedding and truncation.
@@ -28,9 +27,6 @@ struct SheddingOptions {
     SheddingMethod method = SheddingMethod::Auto;
     num::idx target_capacity = 0; ///< Desired target capacity (0 = tolerance-driven only)
     double tolerance = 1e-4; ///< Maximum allowable relative exit-time loss \f$\Delta \tau / \tau\f$
-    double error_threshold =
-        1e-6; ///< Relative error / conditioning threshold to trigger Woodbury fallback
-    num::idx sample_probes = 16; ///< Number of stochastic probe vectors for diagonal sampling
     bool fallback_to_stable =
         true; ///< Enable graceful fallback if Woodbury downdates lose stability
 };
@@ -45,7 +41,6 @@ struct SheddingDiagnostics {
     double initial_mean_exit_time = 0.0;
     double total_estimated_loss = 0.0;
     double relative_loss = 0.0;
-    double max_floating_point_error = 0.0;
     bool fallback_triggered = false;
     std::string fallback_reason;
 };

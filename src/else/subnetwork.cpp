@@ -379,11 +379,11 @@ double Subnetwork::naive_cut_time_loss(const num::Vector &occupancy,
 }
 
 // =============================================================================
-// Woodbury Principal Block Cut-Time Update with Component-Wise Residual Tracking
+// Woodbury Principal Block Cut-Time Update with Accumulated Error Tracking
 // =============================================================================
 // Evaluates the exact holding time loss: \ell_S = q_S^T * (Z_{SS})^{-1} * u_S.
-// Computes backward error ||Z_{SS} c - u_S||_inf. If the residual exceeds
-// tolerance (e.g. ill-conditioning), it falls back to naive_cut_time_loss.
+// Accumulates the scalar dot product with safe_add. If the estimated relative
+// roundoff exceeds tolerance, it falls back to naive_cut_time_loss.
 Subnetwork::CutTimeLossResult
 Subnetwork::cut_time_loss_with_diagnostics(const num::Vector &occupancy,
                                            std::span<const num::idx> removed_states,
@@ -411,25 +411,20 @@ Subnetwork::cut_time_loss_with_diagnostics(const num::Vector &occupancy,
     try {
         solver_->solve_principal_inverse(removed_states, u_S, c, &Z_SS);
 
-        // Backward residual: || Z_SS * c - u_S ||_inf / ||u_S||_inf
-        num::Vector reconstructed(r, 0.0);
-        num::matvec(Z_SS, c, reconstructed);
-        double err = 0.0, scale = 0.0;
+        const auto &q = solver_->inverse_column_sums();
+        double loss = 0.0;
+        double accumulated_error = 0.0;
+        bool precision_acceptable = true;
         for (num::idx i = 0; i < r; ++i) {
-            err = std::max(err, std::abs(reconstructed[i] - u_S[i]));
-            scale = std::max(scale, std::abs(u_S[i]));
+            precision_acceptable =
+                num::safe_add(loss, accumulated_error, q[removed_states[i]] * c[i], tolerance) &&
+                precision_acceptable;
         }
-        const double residual = err / std::max(1e-12, scale);
-
-        if (residual <= tolerance && std::isfinite(residual)) {
-            const auto &q = solver_->inverse_column_sums();
-            double loss = 0.0;
-            for (num::idx i = 0; i < r; ++i) {
-                loss += q[removed_states[i]] * c[i];
-            }
-            if (std::isfinite(loss) && loss >= 0.0) {
-                return {.loss = loss, .estimated_error = residual, .naive_fallback_used = false};
-            }
+        const double relative_error = accumulated_error / std::max(1e-12, loss);
+        if (precision_acceptable && std::isfinite(loss) && std::isfinite(relative_error)) {
+            return {.loss = loss,
+                    .estimated_error = relative_error,
+                    .naive_fallback_used = false};
         }
     } catch (...) {}
 

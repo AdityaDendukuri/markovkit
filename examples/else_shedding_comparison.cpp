@@ -115,17 +115,29 @@ int main() {
 
     const std::vector<num::idx> block_sizes = {1, 2, 4, 8, 12, 16, 20};
     constexpr int repetitions = 300;
+    constexpr double precision_tolerance = 1e-6;
+    std::vector<double> plotted_block_sizes;
+    std::vector<double> accumulated_error_checks;
+    std::vector<double> block_relative_discrepancies;
+    std::vector<double> precision_tolerances;
 
     for (num::idx k : block_sizes) {
         std::vector<num::idx> block(k);
         for (num::idx i = 0; i < k; ++i) {
-            block[i] = n - 1 - i; // Cut peripheral states
+            block[i] = i + 1; // Nested blocks; preserve entrance state 0.
         }
 
         // Warmup & discrepancy
-        double w_loss = subnetwork.cut_time_loss(u, block);
+        const auto diagnostics =
+            subnetwork.cut_time_loss_with_diagnostics(u, block, precision_tolerance);
+        double w_loss = diagnostics.loss;
         double n_loss = subnetwork.naive_cut_time_loss(u, block);
         double rel_diff = std::abs(w_loss - n_loss) / std::max(1e-12, n_loss);
+
+        plotted_block_sizes.push_back(static_cast<double>(k));
+        accumulated_error_checks.push_back(std::max(1e-18, diagnostics.estimated_error));
+        block_relative_discrepancies.push_back(std::max(1e-18, rel_diff));
+        precision_tolerances.push_back(precision_tolerance);
 
         // Benchmark Woodbury
         auto t0 = std::chrono::high_resolution_clock::now();
@@ -164,5 +176,26 @@ int main() {
     num::plt::savefig("else_shedding_comparison.png");
 
     std::cout << "[SUCCESS] Floating-point error plot saved to else_shedding_comparison.png\n";
+
+    // Plot the actual error estimate accumulated by safe_add while evaluating
+    // q_S^T (Z_SS)^-1 u_S.  Each point contains all additions for that block.
+    num::plt::plot(plotted_block_sizes, accumulated_error_checks,
+                   "Accumulated safe\\_add estimate e/x",
+                   "linespoints pt 7 ps 0.8 lw 2 lc rgb '#27ae60'");
+    num::plt::plot(plotted_block_sizes, block_relative_discrepancies,
+                   "Measured Woodbury--direct discrepancy",
+                   "linespoints pt 5 ps 0.8 lw 2 lc rgb '#c0392b'");
+    num::plt::plot(plotted_block_sizes, precision_tolerances,
+                   "Acceptance tolerance 10^{-6}",
+                   "lines dt 2 lw 2 lc rgb '#2c3e50'");
+    num::plt::title("Accumulated Floating-Point Check for Block Shedding");
+    num::plt::xlabel("Removed block size |S|");
+    num::plt::ylabel("Relative error estimate");
+    num::plt::semilogy();
+    num::plt::legend();
+    num::plt::savefig("else_safe_add_accumulation.png");
+
+    std::cout << "[SUCCESS] Accumulated safe_add plot saved to "
+                 "else_safe_add_accumulation.png\n";
     return 0;
 }

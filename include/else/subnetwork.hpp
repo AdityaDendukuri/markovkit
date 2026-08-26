@@ -67,12 +67,12 @@ class Subnetwork {
     /// @brief Result of evaluating cut-time loss with floating-point error tracking.
     struct CutTimeLossResult {
         double loss = 0.0;             ///< Mean holding-time loss \f$\Delta \tau = \tau - \tau_{S^c}\f$
-        double estimated_error = 0.0;   ///< Component-wise backward residual \f$\|Z_{SS} c - u_S\|_\infty\f$
+        double estimated_error = 0.0;   ///< Accumulated relative roundoff estimate
         bool naive_fallback_used = false; ///< True if naive reduced scratch refactor was used
     };
 
     /// @brief Exact combined loss from removing a state block via the Woodbury formula,
-    /// with automatic component-wise residual tracking and fallback to the naive reduced solve.
+    /// with accumulated floating-point tracking and fallback to the naive reduced solve.
     [[nodiscard]] double cut_time_loss(const num::Vector &occupation,
                                        std::span<const num::idx> removed_states,
                                        double tolerance = 1e-6) const;

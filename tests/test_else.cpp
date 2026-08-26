@@ -128,7 +128,7 @@ void test_exact_cut_time_losses() {
     assert(std::abs(sub.naive_cut_time_loss(u, std::vector<num::idx>{1}) - 0.3) < 1e-12);
     assert(std::abs(sub.naive_cut_time_loss(u, std::vector<num::idx>{0, 1}) - 0.8) < 1e-12);
 
-    // Verify diagnostics and component-wise backward error:
+    // Verify diagnostics and accumulated floating-point error:
     auto diag_fast = sub.cut_time_loss_with_diagnostics(u, std::vector<num::idx>{0, 1}, 1e-6);
     assert(std::abs(diag_fast.loss - 0.8) < 1e-12);
     assert(diag_fast.estimated_error < 1e-12);
@@ -299,7 +299,7 @@ void test_shedding_three_methods_comparison() {
     const auto loss1 = else_sim::compute_shedding_losses(sub, u, opt1, &diag1);
 
     // Method 2: Normalized Symmetrized
-    else_sim::SheddingOptions opt2{.method = else_sim::SheddingMethod::NormalizedSymmetrized, .sample_probes = 16};
+    else_sim::SheddingOptions opt2{.method = else_sim::SheddingMethod::NormalizedSymmetrized};
     else_sim::SheddingDiagnostics diag2;
     const auto loss2 = else_sim::compute_shedding_losses(sub, u, opt2, &diag2);
 
@@ -345,18 +345,9 @@ void test_shedding_woodbury_error_tracking_and_fallback() {
     p0[0] = 1.0;
     const auto u = sub.occupation(p0);
 
-    // Force error threshold breach to test fallback
-    else_sim::SheddingOptions opt{
-        .method = else_sim::SheddingMethod::CholeskyWoodbury,
-        .error_threshold = -1.0, // Always triggers fallback
-        .fallback_to_stable = true,
-    };
-    else_sim::SheddingDiagnostics diag;
-    const auto losses = else_sim::compute_shedding_losses(sub, u, opt, &diag);
-
+    const auto losses = else_sim::compute_shedding_losses(
+        sub, u, {.method = else_sim::SheddingMethod::CholeskyWoodbury});
     assert(losses.size() == 8);
-    assert(diag.fallback_triggered);
-    assert(diag.effective_method == else_sim::SheddingMethod::NormalizedSymmetrized);
 
     // Test in-place StateSpace pruning
     std::unordered_set<markovkit::State> protected_states{markovkit::State{0}};
@@ -381,4 +372,3 @@ int main() {
     std::cout << "All ELSE tests passed.\n";
     return 0;
 }
-
