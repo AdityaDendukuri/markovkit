@@ -15,7 +15,8 @@ struct Trajectory {
 };
 
 /// Extract one species from every recorded trajectory state.
-inline std::vector<double> trajectory_component(const Trajectory &trajectory, std::size_t species) {
+template <typename Traj>
+inline std::vector<double> trajectory_component(const Traj &trajectory, std::size_t species) {
     std::vector<double> values;
     values.reserve(trajectory.states.size());
     for (const auto &state : trajectory.states) {
@@ -28,7 +29,8 @@ inline std::vector<double> trajectory_component(const Trajectory &trajectory, st
 }
 
 /// Locate the piecewise-constant trajectory state at each observation time.
-inline std::vector<std::size_t> trajectory_indices_at(const Trajectory &trajectory,
+template <typename Traj>
+inline std::vector<std::size_t> trajectory_indices_at(const Traj &trajectory,
                                                       std::span<const double> observation_times) {
     if (trajectory.times.empty() || trajectory.times.size() != trajectory.states.size()) {
         throw std::invalid_argument("trajectory times and states must be nonempty and aligned");
