@@ -12,8 +12,8 @@ namespace else_sim {
 
 /// Occupation and time-weighted occupation from a shared factorization of -R.
 struct OccupationIntegrals {
-    num::Matrix occupation;               // Integral of p(t) dt.
-    num::Matrix time_weighted_occupation; // Integral of t p(t) dt.
+    num::mat occupation;               // Integral of p(t) dt.
+    num::mat time_weighted_occupation; // Integral of t p(t) dt.
 
     [[nodiscard]] num::idx size() const { return occupation.rows(); }
     [[nodiscard]] num::idx starts() const { return occupation.cols(); }
@@ -34,34 +34,34 @@ class Subnetwork {
     [[nodiscard]] const std::vector<markovkit::BoundaryTransition> &boundary() const {
         return boundary_;
     }
-    [[nodiscard]] const num::SparseMatrix &generator() const { return R_; }
+    [[nodiscard]] const num::spmat &generator() const { return R_; }
     [[nodiscard]] bool is_reversible() const;
     [[nodiscard]] std::span<const double> stationary_weights() const;
-    [[nodiscard]] const num::Vector &inverse_column_sums() const;
+    [[nodiscard]] const num::vec &inverse_column_sums() const;
 
     [[nodiscard]] int find(const markovkit::State &x) const;
 
     // Solve (-R)u = start; u is the expected time spent in each state.
-    [[nodiscard]] num::Vector occupation(const num::Vector &start) const;
+    [[nodiscard]] num::vec occupation(const num::vec &start) const;
 
     // Compute occupation integrals using one factorization.
-    [[nodiscard]] OccupationIntegrals occupation_integrals(const num::Matrix &starts) const;
+    [[nodiscard]] OccupationIntegrals occupation_integrals(const num::mat &starts) const;
 
-    [[nodiscard]] std::vector<double> exit_probabilities(const num::Vector &occupation) const;
+    [[nodiscard]] std::vector<double> exit_probabilities(const num::vec &occupation) const;
     [[nodiscard]] std::vector<double> exit_probabilities(const OccupationIntegrals &occupation,
                                                          num::idx column = 0) const;
 
     [[nodiscard]] double conditional_exit_time(const OccupationIntegrals &occupation,
                                                num::idx boundary_state, num::idx column = 0) const;
 
-    [[nodiscard]] std::vector<double> expected_entries(const num::Vector &occupation,
-                                                       const num::Vector &start) const;
+    [[nodiscard]] std::vector<double> expected_entries(const num::vec &occupation,
+                                                       const num::vec &start) const;
 
     // Exact mean-exit-time loss from removing each state.
-    [[nodiscard]] std::vector<double> cut_time_losses(const num::Vector &occupation) const;
+    [[nodiscard]] std::vector<double> cut_time_losses(const num::vec &occupation) const;
 
     // Exact singleton losses for a selected candidate set.
-    [[nodiscard]] std::vector<double> cut_time_losses(const num::Vector &occupation,
+    [[nodiscard]] std::vector<double> cut_time_losses(const num::vec &occupation,
                                                       std::span<const num::idx> candidates) const;
 
     /// @brief Result of evaluating cut-time loss with floating-point error tracking.
@@ -73,17 +73,17 @@ class Subnetwork {
 
     /// @brief Exact combined loss from removing a state block via the Woodbury formula,
     /// with accumulated floating-point tracking and fallback to the naive reduced solve.
-    [[nodiscard]] double cut_time_loss(const num::Vector &occupation,
+    [[nodiscard]] double cut_time_loss(const num::vec &occupation,
                                        std::span<const num::idx> removed_states,
                                        double tolerance = 1e-6) const;
 
     /// @brief Detailed cut-time loss evaluation returning loss, floating-point error, and fallback diagnostics.
     [[nodiscard]] CutTimeLossResult cut_time_loss_with_diagnostics(
-        const num::Vector &occupation, std::span<const num::idx> removed_states,
+        const num::vec &occupation, std::span<const num::idx> removed_states,
         double tolerance = 1e-6) const;
 
     /// @brief Direct ground-truth naive method: refactorizes the reduced generator from scratch.
-    [[nodiscard]] double naive_cut_time_loss(const num::Vector &occupation,
+    [[nodiscard]] double naive_cut_time_loss(const num::vec &occupation,
                                              std::span<const num::idx> removed_states) const;
 
   private:
@@ -91,7 +91,7 @@ class Subnetwork {
 
     std::vector<markovkit::State> states_;
     std::unordered_map<markovkit::State, int> index_;
-    num::SparseMatrix R_{0, 0, {}, {}, {0}};
+    num::spmat R_{0, 0, {}, {}, {0}};
     std::vector<double> total_rates_;
     std::vector<double> exit_rates_;
     std::vector<num::idx> boundary_states_;

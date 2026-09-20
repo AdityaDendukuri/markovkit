@@ -9,14 +9,14 @@ namespace else_sim {
 
 /// Connected neighborhood grown in descending stationary weight.
 [[nodiscard]] std::vector<num::idx>
-laplacian_neighborhood(const num::SparseMatrix &laplacian,
+laplacian_neighborhood(const num::spmat &laplacian,
                        const std::vector<double> &stationary_sqrt, num::idx initial,
                        num::idx capacity);
 
 /// Convert one symmetric Laplacian restriction into a Markov generator.
 /// Build successive restrictions, retaining every previous boundary destination.
 [[nodiscard]] std::vector<cme::RestrictedGenerator>
-laplacian_restrictions(const num::SparseMatrix &laplacian,
+laplacian_restrictions(const num::spmat &laplacian,
                        const std::vector<double> &stationary_sqrt, num::idx initial,
                        num::idx capacity, int count);
 

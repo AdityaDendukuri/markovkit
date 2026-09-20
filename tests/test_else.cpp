@@ -25,7 +25,7 @@ void test_subnetwork_occupation_integrals_and_exit_law() {
     else_sim::Subnetwork reversible(
         cme::reversible_generator(cme::restrict_cme(sp, model, rates), h));
 
-    num::Vector start(3, 0.0);
+    num::vec start(3, 0.0);
     start[0] = 1.0;
     auto u = sub.occupation(start);
     assert(u.size() == 3);
@@ -44,7 +44,7 @@ void test_subnetwork_occupation_integrals_and_exit_law() {
     assert(std::abs(reversible.cut_time_loss(reversible_u, candidates) -
                     sub.cut_time_loss(u, candidates)) < 1e-12);
 
-    num::Matrix starts(3, 2, 0.0);
+    num::mat starts(3, 2, 0.0);
     starts(0, 0) = 1.0;
     starts(1, 1) = 1.0;
     auto integrals = sub.occupation_integrals(starts);
@@ -101,7 +101,7 @@ void test_exact_cut_time_losses() {
     };
 
     else_sim::Subnetwork sub(cme::restrict_cme(sp, model, {}));
-    num::Vector p0(2, 0.0);
+    num::vec p0(2, 0.0);
     p0[0] = 1.0;
     auto u = sub.occupation(p0);
     assert(std::abs(u[0] - 0.6) < 1e-12);
@@ -149,7 +149,7 @@ void test_laplacian_column_sum_property() {
     const std::vector<num::idx> rows{0, 0, 1, 1};
     const std::vector<num::idx> cols{0, 1, 0, 1};
     const std::vector<double> vals{4.0, -2.0, -2.0, 1.0};
-    const auto L = num::SparseMatrix::from_triplets(2, 2, rows, cols, vals);
+    const auto L = num::spmat::from_triplets(2, 2, rows, cols, vals);
     const std::vector<double> h{1.0, 2.0};
 
     auto step = cme::restrict_laplacian(L, h, {0, 1});
@@ -169,7 +169,7 @@ void test_laplacian_column_sum_property() {
 
 void test_laplacian_trajectory_uses_reversible_solver() {
     const auto laplacian =
-        num::SparseMatrix::from_triplets(3, 3, {0, 0, 1, 1, 1, 2, 2}, {0, 1, 0, 1, 2, 1, 2},
+        num::spmat::from_triplets(3, 3, {0, 0, 1, 1, 1, 2, 2}, {0, 1, 0, 1, 2, 1, 2},
                                          {1.0, -1.0, -1.0, 2.0, -1.0, -1.0, 1.0});
     const std::vector<double> h{1.0, 1.0, 1.0};
     const cme::ReversibleLaplacian generator(laplacian, h);
@@ -184,18 +184,18 @@ void test_laplacian_trajectory_uses_reversible_solver() {
 
 void test_two_step_laplace_density() {
     // Two-step chain:
-    // Step 0: State {0}, generator R = [-2], exit edge to {1} with rate 2.0
-    // Step 1: State {1}, generator R = [-3], exit edge to {2} with rate 3.0
+    // ode_step 0: State {0}, generator R = [-2], exit edge to {1} with rate 2.0
+    // ode_step 1: State {1}, generator R = [-3], exit edge to {2} with rate 3.0
     cme::RestrictedGenerator step0;
     step0.states = {{0}};
     step0.index[step0.states[0]] = 0;
-    step0.generator = num::SparseMatrix::from_triplets(1, 1, {0}, {0}, {-2.0});
+    step0.generator = num::spmat::from_triplets(1, 1, {0}, {0}, {-2.0});
     step0.boundary.push_back({0, {1}, 2.0});
 
     cme::RestrictedGenerator step1;
     step1.states = {{1}};
     step1.index[step1.states[0]] = 0;
-    step1.generator = num::SparseMatrix::from_triplets(1, 1, {0}, {0}, {-3.0});
+    step1.generator = num::spmat::from_triplets(1, 1, {0}, {0}, {-3.0});
     step1.boundary.push_back({0, {2}, 3.0});
 
     else_sim::LaplaceDensitySolver solver({std::move(step0), std::move(step1)});
@@ -289,7 +289,7 @@ void test_shedding_three_methods_comparison() {
     auto reversible = cme::reversible_generator(std::move(restricted), h);
     else_sim::Subnetwork sub(std::move(reversible));
 
-    num::Vector p0(10, 0.0);
+    num::vec p0(10, 0.0);
     p0[0] = 1.0;
     const auto u = sub.occupation(p0);
 
@@ -341,7 +341,7 @@ void test_shedding_woodbury_error_tracking_and_fallback() {
     const std::vector<double> rates{3.0, 1.0};
     else_sim::Subnetwork sub(cme::restrict_cme(sp, model, rates));
 
-    num::Vector p0(8, 0.0);
+    num::vec p0(8, 0.0);
     p0[0] = 1.0;
     const auto u = sub.occupation(p0);
 

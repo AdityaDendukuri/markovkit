@@ -10,7 +10,7 @@ namespace cme {
 
 /// Restricted column generator and the transitions omitted from it.
 struct GeneratorResult {
-    num::SparseMatrix matrix;
+    num::spmat matrix;
     std::vector<double> boundary_rates;
     std::vector<double> diagonal_rates;
     std::vector<markovkit::BoundaryTransition> boundary;
@@ -27,7 +27,7 @@ GeneratorResult build_generator(const StateSpace &sp, const ReactionSystem &mode
 struct RestrictedGenerator {
     std::vector<markovkit::State> states;
     std::unordered_map<markovkit::State, int> index;
-    num::SparseMatrix generator{0, 0, {}, {}, {0}};
+    num::spmat generator{0, 0, {}, {}, {0}};
     std::vector<markovkit::BoundaryTransition> boundary;
     bool symmetric_pattern = false;
 };

@@ -14,7 +14,7 @@ markovkit::State graph_state(num::idx state) {
 
 } // namespace
 
-std::vector<num::idx> laplacian_neighborhood(const num::SparseMatrix &laplacian,
+std::vector<num::idx> laplacian_neighborhood(const num::spmat &laplacian,
                                              const std::vector<double> &stationary_sqrt,
                                              num::idx initial, num::idx capacity) {
     const cme::ReversibleLaplacian validated(laplacian, stationary_sqrt);
@@ -24,7 +24,7 @@ std::vector<num::idx> laplacian_neighborhood(const num::SparseMatrix &laplacian,
     }
 
     std::vector<bool> selected(laplacian.n_rows(), false);
-    num::MaxIndexedPQ<double> frontier(laplacian.n_rows());
+    num::max_indexed_pq<double> frontier(laplacian.n_rows());
     std::vector<num::idx> states;
     states.reserve(capacity);
 
@@ -56,7 +56,7 @@ std::vector<num::idx> laplacian_neighborhood(const num::SparseMatrix &laplacian,
 }
 
 std::vector<cme::RestrictedGenerator>
-laplacian_restrictions(const num::SparseMatrix &laplacian,
+laplacian_restrictions(const num::spmat &laplacian,
                        const std::vector<double> &stationary_sqrt, num::idx initial,
                        num::idx capacity, int count) {
     if (count < 1) {
@@ -120,7 +120,7 @@ markovkit::Trajectory laplacian_else_trajectory(const cme::ReversibleLaplacian &
             break;
         }
 
-        num::Matrix source(subnetwork.size(), 1, 0.0);
+        num::mat source(subnetwork.size(), 1, 0.0);
         source(static_cast<num::idx>(subnetwork.find(graph_state(current))), 0) = 1.0;
         const auto integrals = subnetwork.occupation_integrals(source);
         const auto exit_probabilities = subnetwork.exit_probabilities(integrals);

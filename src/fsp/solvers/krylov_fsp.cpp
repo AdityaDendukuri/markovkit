@@ -49,13 +49,15 @@ std::tuple<FSPSolution, KrylovFSPDiagnostics> solve_krylov_fsp(const FSPProblem 
         int n = sp.size();
 
         // Propagate on the current finite state space.
-        num::Vector p_in(sp.probs);
+        num::vec p_in(sp.probs);
 
-        num::Vector w = num::expv(tau, A, p_in, params.krylov_m, params.krylov_tol);
+        num::vec w = num::expv(tau, A, p_in, params.krylov_m, params.krylov_tol);
 
         // Accept only if retained mass satisfies the Vo--Sidje error budget.
-        const double mass = num::kernel::array::reduce(
-            w, 0.0, [](double total, double value) { return total + std::max(0.0, value); });
+        double mass = 0.0;
+        for (const double value : w) {
+            mass += std::max(0.0, value);
+        }
 
         double required_mass = 1.0 - (params.eps * ((t + tau - t0) / (tf - t0)));
 
@@ -67,14 +69,16 @@ std::tuple<FSPSolution, KrylovFSPDiagnostics> solve_krylov_fsp(const FSPProblem 
         }
 
         // Commit the accepted probability vector.
-        num::Vector nonnegative = w;
-        num::kernel::array::map(nonnegative, [](double value) { return std::max(0.0, value); });
+        num::vec nonnegative = w;
+        for (double &value : nonnegative) {
+            value = std::max(0.0, value);
+        }
         sp.probs.resize(n);
         num::copy_to(nonnegative, sp.probs);
 
         // Remove a state only when both its probability and local derivative are small.
-        num::Vector dp_dt(static_cast<num::idx>(n), 0.0);
-        num::operators::SparseOp(A).apply(w, dp_dt);
+        num::vec dp_dt(static_cast<num::idx>(n), 0.0);
+        num::operators::sparse_op(A).apply(w, dp_dt);
 
         std::vector<bool> remove_mask(n, false);
         for (int i = 0; i < n; ++i) {

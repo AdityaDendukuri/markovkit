@@ -14,7 +14,7 @@ namespace {
 // Method 3: Fast O(n) Expected Entries / Visits Flow Balance
 // Score: s_j = max(0, w_j * u_j) where w_j = -R_jj
 std::vector<double> compute_expected_visits_losses(const Subnetwork &subnetwork,
-                                                   const num::Vector &occupation) {
+                                                   const num::vec &occupation) {
     const num::idx n = subnetwork.size();
     const auto &R = subnetwork.generator();
     std::vector<double> losses(n, 0.0);
@@ -29,13 +29,13 @@ std::vector<double> compute_expected_visits_losses(const Subnetwork &subnetwork,
 // Method 2: Steady-State Normalized Symmetrized Operator
 // S_tilde = 0.5 * (H (-R) H^-1 + H^-1 (-R)^T H) with H = diag(sqrt(pi))
 std::vector<double> compute_symmetrized_losses(const Subnetwork &subnetwork,
-                                               const num::Vector &occupation) {
+                                               const num::vec &occupation) {
     const num::idx n = subnetwork.size();
     const auto &column_sums = subnetwork.inverse_column_sums();
     const auto &R = subnetwork.generator();
     const auto weights = subnetwork.stationary_weights();
 
-    num::Matrix S(n, n, 0.0);
+    num::mat S(n, n, 0.0);
     for (num::idx i = 0; i < n; ++i) {
         const double h_i = (!weights.empty() && i < weights.size()) ? weights[i] : 1.0;
         for (num::idx j = 0; j < n; ++j) {
@@ -61,8 +61,8 @@ std::vector<double> compute_symmetrized_losses(const Subnetwork &subnetwork,
     }
 
     std::vector<double> losses(n, 0.0);
-    num::Vector e(n, 0.0);
-    num::Vector z(n, 0.0);
+    num::vec e(n, 0.0);
+    num::vec z(n, 0.0);
     for (num::idx i = 0; i < n; ++i) {
         e[i] = 1.0;
         num::cholesky_solve(chol, e, z);
@@ -77,7 +77,7 @@ std::vector<double> compute_symmetrized_losses(const Subnetwork &subnetwork,
 } // namespace
 
 std::vector<double> compute_shedding_losses(const Subnetwork &subnetwork,
-                                            const num::Vector &occupation,
+                                            const num::vec &occupation,
                                             const SheddingOptions &options,
                                             SheddingDiagnostics *diagnostics) {
     const num::idx n = subnetwork.size();
@@ -146,7 +146,7 @@ std::vector<double> compute_shedding_losses(const Subnetwork &subnetwork,
     return compute_expected_visits_losses(subnetwork, occupation);
 }
 
-SheddingResult shed_states(const Subnetwork &subnetwork, const num::Vector &occupation,
+SheddingResult shed_states(const Subnetwork &subnetwork, const num::vec &occupation,
                            const std::vector<num::idx> &protected_states,
                            const SheddingOptions &options) {
     const num::idx n = subnetwork.size();
@@ -224,7 +224,7 @@ SheddingResult shed_states(const Subnetwork &subnetwork, const num::Vector &occu
 }
 
 void prune_state_space(cme::StateSpace &states, const Subnetwork &subnetwork,
-                       const num::Vector &entrance,
+                       const num::vec &entrance,
                        const std::unordered_set<markovkit::State> &protected_states,
                        const SheddingOptions &options, SheddingDiagnostics *diagnostics) {
     const num::idx n = subnetwork.size();

@@ -32,7 +32,7 @@ target_include_directories(markovkit PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(markovkit PUBLIC numerics::solvers)
+target_link_libraries(markovkit PUBLIC numerics::numerics)
 
 enable_testing()
 add_subdirectory(tests)

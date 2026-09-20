@@ -57,13 +57,15 @@ solve_adaptive_fsp(const FSPProblem &prob, const AdaptiveFSPParams &params) {
         double dt_flux = (phi > 0.0) ? params.eps_dt / phi : (tf - t);
         double dt = std::min(dt_flux, tf - t);
 
-        num::Vector p_in(sp.probs);
+        num::vec p_in(sp.probs);
 
         // Apply the CME exponential over the selected interval.
-        num::Vector p_out =
+        num::vec p_out =
             num::expv(dt, generator.matrix, p_in, params.krylov_m, params.krylov_tol);
 
-        num::kernel::array::map(p_out, [](double value) { return std::max(0.0, value); });
+        for (double &value : p_out) {
+            value = std::max(0.0, value);
+        }
         sp.probs.resize(n);
         num::copy_to(p_out, sp.probs);
 

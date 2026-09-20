@@ -35,7 +35,7 @@ struct TalbotDensitySolver::Impl {
             }
             solvers.emplace_back(
                 subnetwork.generator,
-                num::AutoResolventOptions{.symmetric_pattern = subnetwork.symmetric_pattern});
+                num::auto_resolvent_options{.symmetric_pattern = subnetwork.symmetric_pattern});
         }
 
         // Resolve global boundary states to local indices once, outside the contour loop.
@@ -55,7 +55,7 @@ struct TalbotDensitySolver::Impl {
 
     std::vector<DensitySolution>
     solve(const std::vector<std::map<markovkit::State, double>> &initial, double time,
-          num::TalbotQuadrature contour, const ContourObserver &observer = nullptr) {
+          num::talbot_quadrature contour, const ContourObserver &observer = nullptr) {
         if (!(time > 0.0)) {
             throw std::invalid_argument("Talbot density time must be positive");
         }
@@ -150,7 +150,7 @@ struct TalbotDensitySolver::Impl {
     std::vector<cme::RestrictedGenerator> subnetworks;
     std::vector<markovkit::State> states;
     std::unordered_map<markovkit::State, num::idx> position;
-    std::vector<num::AutoResolventSolver> solvers;
+    std::vector<num::auto_resolvent_solver> solvers;
     std::vector<std::vector<BoundaryTransfer>> transfers;
 };
 
@@ -177,7 +177,7 @@ DensitySolution LaplaceDensitySolver::solve(const markovkit::State &initial, dou
 
 DensitySolution LaplaceDensitySolver::solve(const std::map<markovkit::State, double> &initial,
                                            double time, num::idx nodes, ContourObserver observer) {
-    return impl_->solve({initial}, time, num::TalbotQuadrature{nodes}, observer).front();
+    return impl_->solve({initial}, time, num::talbot_quadrature{nodes}, observer).front();
 }
 
 DensitySolution LaplaceDensitySolver::solve(const std::map<markovkit::State, double> &initial,
@@ -194,7 +194,7 @@ LaplaceDensitySolver::solve(const std::vector<markovkit::State> &initial_states,
     for (const auto &state : initial_states) {
         initial.push_back({{state, 1.0}});
     }
-    return impl_->solve(initial, time, num::TalbotQuadrature{nodes}, observer);
+    return impl_->solve(initial, time, num::talbot_quadrature{nodes}, observer);
 }
 
 std::vector<DensitySolution>

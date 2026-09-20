@@ -9,34 +9,34 @@ namespace else_sim {
 
 struct Subnetwork::SolverImpl {
     // General subnetworks use an automatically selected dense or sparse solver.
-    explicit SolverImpl(const num::SparseMatrix &operator_matrix)
-        : general_solver(std::make_unique<num::AutoLinearSolver>(operator_matrix)) {}
+    explicit SolverImpl(const num::spmat &operator_matrix)
+        : general_solver(std::make_unique<num::auto_linear_solver>(operator_matrix)) {}
 
-    SolverImpl(num::Matrix symmetric, std::vector<double> stationary_sqrt)
+    SolverImpl(num::mat symmetric, std::vector<double> stationary_sqrt)
         : weights(std::move(stationary_sqrt)) {
         // Reversible subnetworks reduce to a positive-definite Cholesky solve.
-        cholesky_factor = num::cholesky(num::linalg::assume_spd(std::move(symmetric)));
+        cholesky_factor = num::cholesky(num::assume_spd(std::move(symmetric)));
         if (!cholesky_factor->success) {
             throw std::invalid_argument("reversible subnetwork operator is not positive definite");
         }
     }
 
     // solver vars
-    std::unique_ptr<num::AutoLinearSolver> general_solver; // picks LU or sparse LU etc..
-    std::optional<num::CholeskyResult> cholesky_factor; // cholesky would be non-empty if symmetric
+    std::unique_ptr<num::auto_linear_solver> general_solver; // picks LU or sparse LU etc..
+    std::optional<num::cholesky_result> cholesky_factor; // cholesky would be non-empty if symmetric
     std::vector<double> weights;
 
     // inverse diagonal vars
-    mutable num::InverseDiagonalWorkspace inverse_workspace;
-    mutable std::optional<num::Vector> inverse_column_sums_cache;
+    mutable num::inverse_diagonal_workspace inverse_workspace;
+    mutable std::optional<num::vec> inverse_column_sums_cache;
     mutable std::vector<double> inverse_diagonal_cache;
 
-    void solve(const num::Vector &b, num::Vector &x) const {
+    void solve(const num::vec &b, num::vec &x) const {
         if (cholesky_factor) {
             // Convert between generator and symmetric coordinates around the solve.
-            num::Vector transformed_b = b;
+            num::vec transformed_b = b;
             num::divide_elements(transformed_b, weights);
-            num::Vector transformed_x(b.size(), 0.0);
+            num::vec transformed_x(b.size(), 0.0);
             num::cholesky_solve(*cholesky_factor, transformed_b, transformed_x);
             x = std::move(transformed_x);
             num::scale_elements(x, weights);
@@ -45,9 +45,9 @@ struct Subnetwork::SolverImpl {
         general_solver->solve(b, x);
     }
 
-    void solve(const num::Matrix &right_hand_side, num::Matrix &solution) const {
+    void solve(const num::mat &right_hand_side, num::mat &solution) const {
         if (cholesky_factor) {
-            num::Matrix transformed = right_hand_side;
+            num::mat transformed = right_hand_side;
             num::divide_rows(transformed, weights);
             num::cholesky_solve(*cholesky_factor, transformed, solution);
             num::scale_rows(solution, weights);
@@ -56,12 +56,12 @@ struct Subnetwork::SolverImpl {
         general_solver->solve(right_hand_side, solution);
     }
 
-    void solve_transpose(const num::Vector &b, num::Vector &x) const {
+    void solve_transpose(const num::vec &b, num::vec &x) const {
         if (cholesky_factor) {
             // The transpose solve reverses the similarity scaling.
-            num::Vector transformed_b = b;
+            num::vec transformed_b = b;
             num::scale_elements(transformed_b, weights);
-            num::Vector transformed_x(b.size(), 0.0);
+            num::vec transformed_x(b.size(), 0.0);
             num::cholesky_solve(*cholesky_factor, transformed_b, transformed_x);
             x = std::move(transformed_x);
             num::divide_elements(x, weights);
@@ -70,11 +70,11 @@ struct Subnetwork::SolverImpl {
         general_solver->solve_transpose(b, x);
     }
 
-    [[nodiscard]] const num::Vector &inverse_column_sums() const {
+    [[nodiscard]] const num::vec &inverse_column_sums() const {
         if (!inverse_column_sums_cache) {
             const num::idx n = cholesky_factor ? cholesky_factor->L.rows() : general_solver->size();
-            num::Vector ones(n, 1.0);
-            num::Vector sums(n, 0.0);
+            num::vec ones(n, 1.0);
+            num::vec sums(n, 0.0);
             solve_transpose(ones, sums);
             inverse_column_sums_cache = std::move(sums);
         }
@@ -104,7 +104,7 @@ struct Subnetwork::SolverImpl {
         missing.erase(std::unique(missing.begin(), missing.end()), missing.end());
 
         if (!missing.empty()) {
-            num::Vector values(missing.size(), 0.0);
+            num::vec values(missing.size(), 0.0);
             if (cholesky_factor) {
                 num::selected_inverse(*cholesky_factor, missing, missing, values,
                                       inverse_workspace);
@@ -127,14 +127,14 @@ struct Subnetwork::SolverImpl {
     // Solves the reduced system against the principal inverse block Z_{SS} = [(-R)^{-1}]_{S,S}.
     // In reversible coordinates, factors (S^{-1})_{SS} with Cholesky in O(|S|^3) time.
     void solve_principal_inverse(std::span<const num::idx> indices,
-                                 const num::Vector &right_hand_side,
-                                 num::Vector &solution,
-                                 num::Matrix *extracted_block = nullptr) const {
+                                 const num::vec &right_hand_side,
+                                 num::vec &solution,
+                                 num::mat *extracted_block = nullptr) const {
         if (right_hand_side.size() != indices.size() || solution.size() != indices.size()) {
             throw std::invalid_argument("principal inverse solve dimensions must match");
         }
 
-        num::Matrix block;
+        num::mat block;
         if (cholesky_factor) {
             num::inverse_principal_block(*cholesky_factor, indices, block, inverse_workspace);
             if (extracted_block) {
@@ -146,7 +146,7 @@ struct Subnetwork::SolverImpl {
             }
 
             // Solve in symmetric coordinates, then restore generator coordinates.
-            num::Vector transformed = right_hand_side;
+            num::vec transformed = right_hand_side;
             for (num::idx index = 0; index < indices.size(); ++index) {
                 transformed[index] /= weights[indices[index]];
             }
@@ -231,28 +231,28 @@ std::span<const double> Subnetwork::stationary_weights() const {
     return {};
 }
 
-const num::Vector &Subnetwork::inverse_column_sums() const {
+const num::vec &Subnetwork::inverse_column_sums() const {
     return solver_->inverse_column_sums();
 }
 
-num::Vector Subnetwork::occupation(const num::Vector &start) const {
+num::vec Subnetwork::occupation(const num::vec &start) const {
     // Solving -R u = p0 integrates the transient state probabilities.
-    num::Vector u(size(), 0.0);
+    num::vec u(size(), 0.0);
     solver_->solve(start, u);
     return u;
 }
 
-OccupationIntegrals Subnetwork::occupation_integrals(const num::Matrix &starts) const {
+OccupationIntegrals Subnetwork::occupation_integrals(const num::mat &starts) const {
     OccupationIntegrals integrals;
-    integrals.occupation = num::Matrix(size(), starts.cols(), 0.0);
-    integrals.time_weighted_occupation = num::Matrix(size(), starts.cols(), 0.0);
+    integrals.occupation = num::mat(size(), starts.cols(), 0.0);
+    integrals.time_weighted_occupation = num::mat(size(), starts.cols(), 0.0);
     solver_->solve(starts, integrals.occupation);
     // Applying (-R)^-1 twice gives integral t p(t) dt without forming the inverse.
     solver_->solve(integrals.occupation, integrals.time_weighted_occupation);
     return integrals;
 }
 
-std::vector<double> Subnetwork::exit_probabilities(const num::Vector &occupancy) const {
+std::vector<double> Subnetwork::exit_probabilities(const num::vec &occupancy) const {
     // Integrated boundary flux gives the exit-state distribution.
     std::vector<double> probs;
     probs.reserve(boundary_states_.size());
@@ -286,8 +286,8 @@ double Subnetwork::conditional_exit_time(const OccupationIntegrals &integrals,
     return std::max(0.0, integrals.time_weighted_occupation(exit_state_idx, col)) / u;
 }
 
-std::vector<double> Subnetwork::expected_entries(const num::Vector &occupancy,
-                                                 const num::Vector &start) const {
+std::vector<double> Subnetwork::expected_entries(const num::vec &occupancy,
+                                                 const num::vec &start) const {
     std::vector<double> counts(size(), 0.0);
     for (num::idx j = 0; j < size(); ++j) {
         // Departures equal rate times occupation; subtract the initial entrance.
@@ -296,14 +296,14 @@ std::vector<double> Subnetwork::expected_entries(const num::Vector &occupancy,
     return counts;
 }
 
-std::vector<double> Subnetwork::cut_time_losses(const num::Vector &occupancy) const {
+std::vector<double> Subnetwork::cut_time_losses(const num::vec &occupancy) const {
     const num::idx n = size();
     std::vector<num::idx> candidates(n);
     std::iota(candidates.begin(), candidates.end(), num::idx{0});
     return cut_time_losses(occupancy, candidates);
 }
 
-std::vector<double> Subnetwork::cut_time_losses(const num::Vector &occupancy,
+std::vector<double> Subnetwork::cut_time_losses(const num::vec &occupancy,
                                                 std::span<const num::idx> candidates) const {
     if (occupancy.size() != size()) {
         throw std::invalid_argument("cut-time occupation size must match the subnetwork");
@@ -328,7 +328,7 @@ std::vector<double> Subnetwork::cut_time_losses(const num::Vector &occupancy,
 // Explicitly forms the (n - |S|) x (n - |S|) reduced generator submatrix
 // -R_{S^c, S^c}, solves for reduced transient occupation u_{reduced}, and
 // computes exact ground-truth loss: \Delta \tau = 1^T u - 1^T u_{reduced}.
-double Subnetwork::naive_cut_time_loss(const num::Vector &occupancy,
+double Subnetwork::naive_cut_time_loss(const num::vec &occupancy,
                                        std::span<const num::idx> removed_states) const {
     const num::idx n = size();
     if (removed_states.empty()) {
@@ -355,8 +355,8 @@ double Subnetwork::naive_cut_time_loss(const num::Vector &occupancy,
     const num::idx m = kept.size();
 
     // Extract reduced generator -R_reduced and initial entrance p_reduced = (-R * occupancy)[kept]
-    num::Matrix R_red(m, m, 0.0);
-    num::Vector p_red(m, 0.0);
+    num::mat R_red(m, m, 0.0);
+    num::vec p_red(m, 0.0);
     for (num::idx i = 0; i < m; ++i) {
         for (num::idx j = 0; j < m; ++j) {
             R_red(i, j) = -R_(kept[i], kept[j]);
@@ -366,7 +366,7 @@ double Subnetwork::naive_cut_time_loss(const num::Vector &occupancy,
         }
     }
 
-    num::Vector u_red(m, 0.0);
+    num::vec u_red(m, 0.0);
     auto lu_red = num::lu(num::assume_square(std::move(R_red)));
     if (lu_red.singular) {
         return 0.0;
@@ -385,7 +385,7 @@ double Subnetwork::naive_cut_time_loss(const num::Vector &occupancy,
 // Accumulates the scalar dot product with safe_add. If the estimated relative
 // roundoff exceeds tolerance, it falls back to naive_cut_time_loss.
 Subnetwork::CutTimeLossResult
-Subnetwork::cut_time_loss_with_diagnostics(const num::Vector &occupancy,
+Subnetwork::cut_time_loss_with_diagnostics(const num::vec &occupancy,
                                            std::span<const num::idx> removed_states,
                                            double tolerance) const {
     if (occupancy.size() != size()) {
@@ -401,13 +401,13 @@ Subnetwork::cut_time_loss_with_diagnostics(const num::Vector &occupancy,
     }
 
     const num::idx r = removed_states.size();
-    num::Vector u_S(r, 0.0);
+    num::vec u_S(r, 0.0);
     for (num::idx i = 0; i < r; ++i) {
         u_S[i] = occupancy[removed_states[i]];
     }
 
-    num::Vector c(r, 0.0);
-    num::Matrix Z_SS;
+    num::vec c(r, 0.0);
+    num::mat Z_SS;
     try {
         solver_->solve_principal_inverse(removed_states, u_S, c, &Z_SS);
 
@@ -434,7 +434,7 @@ Subnetwork::cut_time_loss_with_diagnostics(const num::Vector &occupancy,
             .naive_fallback_used = true};
 }
 
-double Subnetwork::cut_time_loss(const num::Vector &occupancy,
+double Subnetwork::cut_time_loss(const num::vec &occupancy,
                                  std::span<const num::idx> removed_states,
                                  double tolerance) const {
     return cut_time_loss_with_diagnostics(occupancy, removed_states, tolerance).loss;

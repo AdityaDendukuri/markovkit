@@ -59,7 +59,7 @@ struct ExitChoice {
     std::vector<double> rates;
 };
 
-void prune(cme::StateSpace &states, const Subnetwork &subnetwork, const num::Vector &entrance,
+void prune(cme::StateSpace &states, const Subnetwork &subnetwork, const num::vec &entrance,
            const StateWeights &protected_states, num::idx capacity) {
     if (states.size() <= static_cast<int>(capacity)) {
         return;
@@ -98,7 +98,7 @@ Subnetwork prepare_subnetwork(cme::StateSpace &workspace, const StateWeights &en
 
     if (workspace.size() > static_cast<int>(options.capacity)) {
         Subnetwork expanded(cme::restrict_cme(workspace, model, rates));
-        num::Vector entrance(workspace.size(), 0.0);
+        num::vec entrance(workspace.size(), 0.0);
         for (const auto &[state, weight] : entrances) {
             entrance[static_cast<num::idx>(workspace.find(state))] = weight;
         }
@@ -189,14 +189,14 @@ std::vector<markovkit::Trajectory> else_ensemble(const markovkit::ReactionSystem
             entrance_states.push_back(state);
         }
 
-        num::Matrix right_hand_sides(subnetwork.size(), entrance_states.size(), 0.0);
+        num::mat right_hand_sides(subnetwork.size(), entrance_states.size(), 0.0);
         for (num::idx column = 0; column < entrance_states.size(); ++column) {
             right_hand_sides(static_cast<num::idx>(subnetwork.find(entrance_states[column])),
                              column) = 1.0;
         }
         const auto integrals = subnetwork.occupation_integrals(right_hand_sides);
 
-        std::vector<num::CategoricalSampler> exit_distributions;
+        std::vector<num::categorical_sampler> exit_distributions;
         exit_distributions.reserve(entrance_states.size());
         // Cache one exit distribution for each distinct entrance.
         for (num::idx column = 0; column < entrance_states.size(); ++column) {
@@ -268,7 +268,7 @@ std::vector<cme::RestrictedGenerator> density_subnetworks(const markovkit::React
         }
 
         auto subnetwork = prepare_subnetwork(workspace, density, model, rates, options);
-        num::Vector entrance(subnetwork.size(), 0.0);
+        num::vec entrance(subnetwork.size(), 0.0);
         for (const auto &[state, weight] : density) {
             entrance[static_cast<num::idx>(subnetwork.find(state))] = weight;
         }

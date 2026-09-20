@@ -12,10 +12,10 @@
 namespace ssa {
 
 /// Gillespie's exact direct stochastic simulation method templated over PRNG.
-template <typename Rng = std::mt19937_64>
+template <typename rng_state = std::mt19937_64>
 inline markovkit::Trajectory
 gillespie(const markovkit::ReactionSystem &model, const std::vector<double> &rates,
-          const markovkit::State &initial, double t0, double tf, Rng &rng,
+          const markovkit::State &initial, double t0, double tf, rng_state &rng,
           std::size_t maximum_steps = std::numeric_limits<std::size_t>::max()) {
     std::uniform_real_distribution<double> uniform(0.0, 1.0);
 

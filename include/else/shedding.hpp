@@ -55,19 +55,19 @@ struct SheddingResult {
 
 /// @brief Computes candidate-by-candidate mean-exit-time loss for all states in a subnetwork.
 [[nodiscard]] std::vector<double>
-compute_shedding_losses(const Subnetwork &subnetwork, const num::Vector &occupation,
+compute_shedding_losses(const Subnetwork &subnetwork, const num::vec &occupation,
                         const SheddingOptions &options = {},
                         SheddingDiagnostics *diagnostics = nullptr);
 
 /// @brief Performs state space shedding on a subnetwork given an initial occupation profile.
 [[nodiscard]] SheddingResult shed_states(const Subnetwork &subnetwork,
-                                         const num::Vector &occupation,
+                                         const num::vec &occupation,
                                          const std::vector<num::idx> &protected_states = {},
                                          const SheddingOptions &options = {});
 
 /// @brief Prunes a CME StateSpace in-place based on the specified shedding options.
 void prune_state_space(cme::StateSpace &states, const Subnetwork &subnetwork,
-                       const num::Vector &entrance,
+                       const num::vec &entrance,
                        const std::unordered_set<markovkit::State> &protected_states,
                        const SheddingOptions &options = {},
                        SheddingDiagnostics *diagnostics = nullptr);

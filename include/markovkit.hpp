@@ -7,4 +7,5 @@
 #include "markovkit/state.hpp"
 #include "markovkit/statistics.hpp"
 #include "markovkit/trajectory.hpp"
+#include "rdme/rdme.hpp"
 #include "ssa/ssa.hpp"

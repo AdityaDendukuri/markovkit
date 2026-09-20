@@ -14,11 +14,11 @@ struct LeapOptions {
 };
 
 /// Poisson tau-leaping templated over PRNG.
-template <typename Rng = std::mt19937_64>
+template <typename rng_state = std::mt19937_64>
 inline markovkit::Trajectory
 tau_leaping(const markovkit::ReactionSystem &model, const std::vector<double> &rates,
             const markovkit::State &initial, double t0, double tf, LeapOptions options,
-            Rng &rng) {
+            rng_state &rng) {
     model.validate();
     markovkit::Trajectory path;
     path.times.push_back(t0);

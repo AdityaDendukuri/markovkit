@@ -5,6 +5,6 @@
 namespace markovkit {
 
 /// Integer coordinates identifying one state of a discrete Markov process.
-using State = num::MultiIndex;
+using State = num::multi_index;
 
 } // namespace markovkit

@@ -10,7 +10,7 @@ markovkit::State graph_state(num::idx state) {
     return markovkit::State{static_cast<int>(state)};
 }
 
-void validate_laplacian(const num::SparseMatrix &laplacian,
+void validate_laplacian(const num::spmat &laplacian,
                         const std::vector<double> &stationary_sqrt) {
     if (laplacian.n_rows() != laplacian.n_cols()) {
         throw std::invalid_argument("Laplacian must be square");
@@ -29,19 +29,19 @@ ReversibleGenerator reversible_generator(RestrictedGenerator restricted,
     // Similarity-transform -Q into a symmetric operator.
     std::vector<double> weights(stationary_sqrt.begin(), stationary_sqrt.end());
     auto symmetric = num::diagonal_similarity(num::scaled(restricted.generator, -1.0), weights);
-    if (num::linalg::relative_symmetry_error(symmetric) > 1e-10) {
+    if (num::linear::relative_symmetry_error(symmetric) > 1e-10) {
         throw std::invalid_argument("stationary weights do not symmetrize the generator");
     }
     return {std::move(restricted), std::move(weights), std::move(symmetric)};
 }
 
-ReversibleLaplacian::ReversibleLaplacian(const num::SparseMatrix &laplacian,
+ReversibleLaplacian::ReversibleLaplacian(const num::spmat &laplacian,
                                          const std::vector<double> &stationary_sqrt)
     : laplacian_(&laplacian), stationary_sqrt_(&stationary_sqrt) {
     validate_laplacian(laplacian, stationary_sqrt);
 }
 
-RestrictedGenerator restrict_laplacian(const num::SparseMatrix &laplacian,
+RestrictedGenerator restrict_laplacian(const num::spmat &laplacian,
                                        const std::vector<double> &stationary_sqrt,
                                        const std::vector<num::idx> &states) {
     validate_laplacian(laplacian, stationary_sqrt);
@@ -106,7 +106,7 @@ RestrictedGenerator restrict_laplacian(const num::SparseMatrix &laplacian,
         }
     }
     restricted.generator =
-        num::SparseMatrix::from_triplets(states.size(), states.size(), rows, columns, values);
+        num::spmat::from_triplets(states.size(), states.size(), rows, columns, values);
     restricted.symmetric_pattern = true;
     return restricted;
 }

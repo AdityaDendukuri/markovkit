@@ -56,7 +56,7 @@ GeneratorResult build_generator(const StateSpace &sp, const ReactionSystem &mode
         }
     }
 
-    num::SparseMatrix A = num::SparseMatrix::from_triplets(
+    num::spmat A = num::spmat::from_triplets(
         static_cast<num::idx>(n), static_cast<num::idx>(n), rows, cols, vals);
 
     // Boundary metadata supports truncation control and ELSE exits.
