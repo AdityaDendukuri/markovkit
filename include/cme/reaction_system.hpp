@@ -1,22 +1,21 @@
 #pragma once
 
+#include "core/types.hpp"
 #include "markovkit/state.hpp"
 #include <algorithm>
 #include <functional>
-#include <span>
 #include <stdexcept>
-#include <vector>
 
 namespace cme {
 
-using Propensity =
-    std::function<double(const markovkit::State &, const std::vector<double> &, double)>;
+using propensity =
+    std::function<double(const markovkit::state &, const num::array<double> &, double)>;
 
 /// Stoichiometric changes and their state-dependent reaction rates.
-struct ReactionSystem {
+struct reaction_system {
     // changes[r] and propensities[r] describe the same reaction.
-    std::vector<markovkit::State> changes;
-    std::vector<Propensity> propensities;
+    num::array<markovkit::state> changes;
+    num::array<propensity> propensities;
 
     [[nodiscard]] std::size_t size() const noexcept { return changes.size(); }
 
@@ -27,9 +26,9 @@ struct ReactionSystem {
         }
     }
 
-    [[nodiscard]] double evaluate_propensities(const markovkit::State &state,
-                                               const std::vector<double> &rates, double time,
-                                               std::span<double> output) const {
+    [[nodiscard]] double evaluate_propensities(const markovkit::state &state,
+                                               const num::array<double> &rates, double time,
+                                               num::view<double> output) const {
         if (output.size() != propensities.size()) {
             throw std::invalid_argument("propensity output size must match the reaction count");
         }
@@ -41,8 +40,8 @@ struct ReactionSystem {
         return total;
     }
 
-    [[nodiscard]] double total_propensity(const markovkit::State &state,
-                                          const std::vector<double> &rates, double time) const {
+    [[nodiscard]] double total_propensity(const markovkit::state &state,
+                                          const num::array<double> &rates, double time) const {
         double total = 0.0;
         for (const auto &propensity : propensities) {
             total += std::max(0.0, propensity(state, rates, time));

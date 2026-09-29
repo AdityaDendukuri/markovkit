@@ -1,5 +1,5 @@
+#include "core/types.hpp"
 #include "markovkit.hpp"
-#include <vector>
 
 int main() {
     // Mutual cubic repression creates two preferred expression states.
@@ -10,9 +10,9 @@ int main() {
     const double d_v = 1.0;
     const double K3 = K * K * K;
 
-    const std::vector<double> rates = {alpha, beta, K3, d_u, alpha, beta, K3, d_v};
+    const num::array<double> rates = {alpha, beta, K3, d_u, alpha, beta, K3, d_v};
 
-    markovkit::ReactionSystem model;
+    markovkit::reaction_system model;
     model.changes = {
         {1, 0},  // R1: 0 -> U
         {-1, 0}, // R2: U -> 0
@@ -20,20 +20,20 @@ int main() {
         {0, -1}, // R4: V -> 0
     };
     model.propensities = {
-        [](const markovkit::State &x, const std::vector<double> &r, double) {
+        [](const markovkit::state &x, const num::array<double> &r, double) {
             double v3 = static_cast<double>(x[1]) * x[1] * x[1];
             return r[0] + (r[1] * r[2] / (r[2] + v3));
         },
-        [](const markovkit::State &x, const std::vector<double> &r, double) { return r[3] * x[0]; },
-        [](const markovkit::State &x, const std::vector<double> &r, double) {
+        [](const markovkit::state &x, const num::array<double> &r, double) { return r[3] * x[0]; },
+        [](const markovkit::state &x, const num::array<double> &r, double) {
             double u3 = static_cast<double>(x[0]) * x[0] * x[0];
             return r[4] + (r[5] * r[6] / (r[6] + u3));
         },
-        [](const markovkit::State &x, const std::vector<double> &r, double) { return r[7] * x[1]; },
+        [](const markovkit::state &x, const num::array<double> &r, double) { return r[7] * x[1]; },
     };
 
     // The distribution starts at the symmetric expression state.
-    fsp::FSPProblem prob;
+    fsp::fsp_problem prob;
     prob.model = model;
     prob.u0 = {100, 100};
     prob.t0 = 0.0;
@@ -42,7 +42,7 @@ int main() {
     prob.bc = fsp::rect_boundary(500);
 
     // Absolute pruning keeps the adaptive support compact.
-    fsp::AdaptiveFSPParams params;
+    fsp::adaptive_fsp_params params;
     params.eps_dt = 10.0;
     params.prob_quantile = 0.0;
     params.flux_tolerance = 0.0;
@@ -54,10 +54,10 @@ int main() {
     const auto solution = std::get<0>(fsp::solve_adaptive_fsp(prob, params));
     const auto means = solution.mean_trajectory();
 
-    std::vector<double> u, v, sizes;
+    num::array<double> u, v, sizes;
     for (std::size_t i = 0; i < solution.times.size(); ++i) {
-        u.push_back(means[i][0]);
-        v.push_back(means[i][1]);
+        u.push_back(means(i, 0));
+        v.push_back(means(i, 1));
         sizes.push_back(solution.state_space_sizes[i]);
     }
 
@@ -65,7 +65,7 @@ int main() {
     // Reduce the final joint distribution to U and V marginals.
     const auto marginal_u = solution.marginal(last, 0);
     const auto marginal_v = solution.marginal(last, 1);
-    std::vector<double> counts_u, probs_u, counts_v, probs_v;
+    num::array<double> counts_u, probs_u, counts_v, probs_v;
     for (int c = 0; c <= 500; ++c) {
         const double pu = marginal_u.contains(c) ? marginal_u.at(c) : 0.0;
         const double pv = marginal_v.contains(c) ? marginal_v.at(c) : 0.0;

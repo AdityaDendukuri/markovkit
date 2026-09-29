@@ -19,11 +19,6 @@ add_library(markovkit
     src/fsp/solution.cpp
     src/fsp/solvers/adaptive_fsp.cpp
     src/fsp/solvers/krylov_fsp.cpp
-    src/else/subnetwork.cpp
-    src/else/shedding.cpp
-    src/else/trajectory.cpp
-    src/else/density.cpp
-    src/else/laplacian.cpp
 )
 add_library(markovkit::markovkit ALIAS markovkit)
 

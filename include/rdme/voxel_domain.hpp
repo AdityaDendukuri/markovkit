@@ -2,18 +2,18 @@
 /// @brief Spatial geometry and diffusion data for an RDME model.
 #pragma once
 
+#include "core/types.hpp"
 #include "structures/concepts.hpp"
 #include <cmath>
 #include <concepts>
 #include <cstddef>
 #include <stdexcept>
 #include <utility>
-#include <vector>
 
 namespace rdme {
 
 template <class Graph>
-concept VoxelGraph = requires(const Graph &graph, typename Graph::index_type vertex) {
+concept voxel_graph = requires(const Graph &graph, typename Graph::index_type vertex) {
     requires num::concepts::incidence_structure<Graph, typename Graph::index_type>;
     {graph.neighbors(vertex)};
     {graph.neighbors(vertex).begin()->to}->std::convertible_to<typename Graph::index_type>;
@@ -21,7 +21,7 @@ concept VoxelGraph = requires(const Graph &graph, typename Graph::index_type ver
 };
 
 template <class Graph>
-concept UniformCellGraph = requires(const Graph &graph) {
+concept uniform_cell_graph = requires(const Graph &graph) {
     {graph.cell_volume()}->std::convertible_to<double>;
 };
 
@@ -31,20 +31,20 @@ concept UniformCellGraph = requires(const Graph &graph) {
 /// rate per molecule from voxel i along edge e is
 /// `diffusivity[species] * e.weight / volume[i]`. The graph may be an implicit
 /// structured grid or an explicitly stored mesh graph.
-template <VoxelGraph Graph>
-class VoxelDomain {
+template <voxel_graph Graph>
+class voxel_domain {
   public:
     using graph_type = Graph;
     using index_type = typename Graph::index_type;
 
-    VoxelDomain(Graph graph, std::vector<double> voxel_volumes, std::vector<double> diffusivities)
+    voxel_domain(Graph graph, num::array<double> voxel_volumes, num::array<double> diffusivities)
         : graph_(std::move(graph)), voxel_volumes_(std::move(voxel_volumes)),
           diffusivities_(std::move(diffusivities)) {
         validate();
     }
 
     /// Construct a uniform-volume domain from a graph that exposes cell_volume().
-    VoxelDomain(Graph graph, std::vector<double> diffusivities) requires UniformCellGraph<Graph>
+    voxel_domain(Graph graph, num::array<double> diffusivities) requires uniform_cell_graph<Graph>
         : graph_(std::move(graph)),
           voxel_volumes_(static_cast<std::size_t>(graph_.n_vertices()),
                          static_cast<double>(graph_.cell_volume())),
@@ -55,10 +55,10 @@ class VoxelDomain {
     [[nodiscard]] const Graph &graph() const noexcept { return graph_; }
     [[nodiscard]] index_type n_voxels() const noexcept { return graph_.n_vertices(); }
     [[nodiscard]] std::size_t n_species() const noexcept { return diffusivities_.size(); }
-    [[nodiscard]] const std::vector<double> &voxel_volumes() const noexcept {
+    [[nodiscard]] const num::array<double> &voxel_volumes() const noexcept {
         return voxel_volumes_;
     }
-    [[nodiscard]] const std::vector<double> &diffusivities() const noexcept {
+    [[nodiscard]] const num::array<double> &diffusivities() const noexcept {
         return diffusivities_;
     }
 
@@ -120,14 +120,14 @@ class VoxelDomain {
     }
 
     Graph graph_;
-    std::vector<double> voxel_volumes_;
-    std::vector<double> diffusivities_;
+    num::array<double> voxel_volumes_;
+    num::array<double> diffusivities_;
 };
 
 template <class Graph>
-VoxelDomain(Graph, std::vector<double>, std::vector<double>) -> VoxelDomain<Graph>;
+voxel_domain(Graph, num::array<double>, num::array<double>) -> voxel_domain<Graph>;
 
 template <class Graph>
-VoxelDomain(Graph, std::vector<double>) -> VoxelDomain<Graph>;
+voxel_domain(Graph, num::array<double>) -> voxel_domain<Graph>;
 
 } // namespace rdme

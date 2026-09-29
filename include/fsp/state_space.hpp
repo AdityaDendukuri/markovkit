@@ -3,5 +3,5 @@
 #include "cme/state_space.hpp"
 
 namespace fsp {
-using StateSpace = cme::StateSpace;
+using state_space = cme::state_space;
 } // namespace fsp

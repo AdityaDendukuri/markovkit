@@ -6,9 +6,9 @@
 namespace markovkit {
 
 /// A transition leaving a restricted state set; source is a local matrix index.
-struct BoundaryTransition {
+struct boundary_transition {
     num::idx source{};
-    State destination;
+    state destination;
     double rate{};
 };
 

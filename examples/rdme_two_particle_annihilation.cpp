@@ -1,37 +1,35 @@
+#include "core/types.hpp"
 #include "linear/expv/expv.hpp"
 #include "linear/solvers/math_gmres.hpp"
 #include "plot/plot.hpp"
 #include "rdme/rdme.hpp"
 #include "structures/graph/structured_grid.hpp"
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <limits>
-#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace {
 
-using Clock = std::chrono::steady_clock;
+using clock = std::chrono::steady_clock;
 
-struct Case {
+struct benchmark_case {
     int dimension;
     num::idx cells_per_axis;
     double diffusivity;
     double reaction_rate;
     double shift;
 
-    bool operator==(const Case &) const = default;
+    bool operator==(const benchmark_case &) const = default;
 };
 
-struct Observation {
+struct observation {
     num::solver_result solver;
     double setup_ms{};
     double solve_ms{};
@@ -43,29 +41,29 @@ struct Observation {
     std::size_t levels{};
 };
 
-struct PlotRecord {
-    Case problem;
+struct plot_record {
+    benchmark_case problem;
     num::idx states;
     std::string initial_condition;
     std::string method;
-    Observation observation;
+    observation observation;
 };
 
-std::vector<PlotRecord> plot_records;
+num::array<plot_record> plot_records;
 
-double milliseconds(Clock::time_point begin, Clock::time_point end) {
+double milliseconds(clock::time_point begin, clock::time_point end) {
     return std::chrono::duration<double, std::milli>(end - begin).count();
 }
 
 template <typename Preconditioner, typename System>
-Observation solve(const System &system, const Preconditioner &preconditioner, const num::vec &rhs,
+observation solve(const System &system, const Preconditioner &preconditioner, const num::vec &rhs,
                   num::idx vacuum, num::idx joint_begin, num::idx joint_end, double shift,
                   const num::vec &reaction_rates, const num::gmres_options &options,
                   double setup_ms, std::size_t levels) {
     num::vec solution(system.rows(), 0.0);
-    const auto begin = Clock::now();
+    const auto begin = clock::now();
     const auto result = num::gmres(system, preconditioner, rhs, solution, options);
-    const auto end = Clock::now();
+    const auto end = clock::now();
 
     double survival_transform = 0.0;
     double laplace_transform = 0.0;
@@ -86,13 +84,13 @@ Observation solve(const System &system, const Preconditioner &preconditioner, co
 }
 
 template <typename System>
-Observation solve_plain(const System &system, const num::vec &rhs, num::idx vacuum,
+observation solve_plain(const System &system, const num::vec &rhs, num::idx vacuum,
                         num::idx joint_begin, num::idx joint_end, double shift,
                         const num::vec &reaction_rates, const num::gmres_options &options) {
     num::vec solution(system.rows(), 0.0);
-    const auto begin = Clock::now();
+    const auto begin = clock::now();
     const auto result = num::gmres(system, rhs, solution, options);
-    const auto end = Clock::now();
+    const auto end = clock::now();
 
     double survival_transform = 0.0;
     double laplace_transform = 0.0;
@@ -112,9 +110,9 @@ Observation solve_plain(const System &system, const num::vec &rhs, num::idx vacu
             0};
 }
 
-void emit(const Case &problem, num::idx voxels, num::idx states, std::string_view initial_condition,
-          double initial_separation, std::string_view method, const Observation &observation,
-          double reference_transform, double generator_setup_ms) {
+void emit(const benchmark_case &problem, num::idx voxels, num::idx states,
+          std::string_view initial_condition, double initial_separation, std::string_view method,
+          const observation &observation, double reference_transform, double generator_setup_ms) {
     const double transform_difference =
         observation.solver.converged ? std::abs(observation.laplace_transform - reference_transform)
                                      : std::numeric_limits<double>::quiet_NaN();
@@ -150,11 +148,11 @@ void save_transform_plot() {
         for (int dimension : {1, 2, 3}) {
             add_plot_series(
                 std::to_string(dimension) + "D",
-                [](const PlotRecord &record) {
+                [](const plot_record &record) {
                     return static_cast<double>(record.problem.cells_per_axis);
                 },
-                [](const PlotRecord &record) { return record.observation.laplace_transform; },
-                [=](const PlotRecord &record) {
+                [](const plot_record &record) { return record.observation.laplace_transform; },
+                [=](const plot_record &record) {
                     return record.method == "multigrid" &&
                            record.initial_condition == initial_condition &&
                            record.problem.dimension == dimension &&
@@ -181,11 +179,11 @@ void save_solver_plot() {
         for (int dimension : {1, 2, 3}) {
             add_plot_series(
                 std::to_string(dimension) + "D",
-                [](const PlotRecord &record) { return static_cast<double>(record.states); },
-                [](const PlotRecord &record) {
+                [](const plot_record &record) { return static_cast<double>(record.states); },
+                [](const plot_record &record) {
                     return static_cast<double>(record.observation.solver.iterations);
                 },
-                [=](const PlotRecord &record) {
+                [=](const plot_record &record) {
                     return record.method == method &&
                            record.initial_condition == "opposite_corners" &&
                            record.problem.dimension == dimension &&
@@ -208,38 +206,38 @@ void save_configuration_density_plot() {
     constexpr num::idx cells = 32;
     constexpr double spacing = 1.0 / static_cast<double>(cells);
     num::structured_grid_graph<1> grid({cells}, {spacing});
-    rdme::VoxelDomain domain(std::move(grid), std::vector<double>{1.0, 1.0});
-    num::array<rdme::LocalReaction> reactions{rdme::LocalReaction{
+    rdme::voxel_domain domain(std::move(grid), num::array<double>{1.0, 1.0});
+    num::array<rdme::local_reaction> reactions{rdme::local_reaction{
         {-1, -1},
-        [](std::span<const int> counts, std::span<const double> parameters, double volume, double) {
+        [](num::view<const int> counts, num::view<const double> parameters, double volume, double) {
             return parameters[0] * static_cast<double>(counts[0] * counts[1]) / volume;
         }}};
-    rdme::ReactionDiffusionModel model(std::move(domain), std::move(reactions));
-    rdme::RestrictedGenerator generator(std::move(model), num::array<int>{1, 1},
-                                        num::array<double>{10.0});
+    rdme::reaction_diffusion_model model(std::move(domain), std::move(reactions));
+    rdme::restricted_generator generator(std::move(model), num::array<int>{1, 1},
+                                         num::array<double>{10.0});
 
-    rdme::Configuration initial_configuration(generator.state_space().layout().size(), 0);
+    rdme::configuration initial_configuration(generator.state_space().layout().size(), 0);
     initial_configuration[generator.state_space().layout().index(0, 0)] = 1;
     initial_configuration[generator.state_space().layout().index(cells - 1, 1)] = 1;
     num::vec initial(generator.rows(), 0.0);
     initial[generator.state_space().find(initial_configuration)] = 1.0;
 
-    num::idx joint_sector = rdme::ReactionStateSpace::npos;
+    num::idx joint_sector = rdme::reaction_state_space::npos;
     for (num::idx sector = 0; sector < generator.state_space().n_sectors(); ++sector) {
         if (generator.state_space().sector_totals()[sector] == num::array<int>({1, 1})) {
             joint_sector = sector;
             break;
         }
     }
-    if (joint_sector == rdme::ReactionStateSpace::npos)
+    if (joint_sector == rdme::reaction_state_space::npos)
         throw std::logic_error("two-particle sector is absent");
     const num::idx joint_begin = generator.state_space().sector_offsets()[joint_sector];
     const num::idx joint_end = generator.state_space().sector_offsets()[joint_sector + 1];
 
-    const std::array<double, 4> times{0.002, 0.02, 0.1, 0.5};
-    std::array<num::vec, 4> densities;
-    std::array<double, 4> survival{};
-    std::array<double, 4> color_max{};
+    const num::static_array<double, 4> times{0.002, 0.02, 0.1, 0.5};
+    num::static_array<num::vec, 4> densities;
+    num::static_array<double, 4> survival{};
+    num::static_array<double, 4> color_max{};
     num::vec probability = initial;
     double current_time = 0.0;
     for (std::size_t snapshot = 0; snapshot < times.size(); ++snapshot) {
@@ -310,41 +308,41 @@ void save_plots() {
 }
 
 template <std::size_t D>
-void run_case(const Case &problem) {
-    std::array<num::idx, D> dimensions{};
+void run_case(const benchmark_case &problem) {
+    num::static_array<num::idx, D> dimensions{};
     dimensions.fill(problem.cells_per_axis);
-    std::array<double, D> spacing{};
+    num::static_array<double, D> spacing{};
     spacing.fill(1.0 / static_cast<double>(problem.cells_per_axis));
     num::structured_grid_graph<D> grid(dimensions, spacing);
-    rdme::VoxelDomain domain(std::move(grid),
-                             std::vector<double>{problem.diffusivity, problem.diffusivity});
-    num::array<rdme::LocalReaction> reactions{rdme::LocalReaction{
+    rdme::voxel_domain domain(std::move(grid),
+                              num::array<double>{problem.diffusivity, problem.diffusivity});
+    num::array<rdme::local_reaction> reactions{rdme::local_reaction{
         {-1, -1},
-        [](std::span<const int> counts, std::span<const double> parameters, double volume, double) {
+        [](num::view<const int> counts, num::view<const double> parameters, double volume, double) {
             return parameters[0] * static_cast<double>(counts[0] * counts[1]) / volume;
         }}};
-    rdme::ReactionDiffusionModel model(std::move(domain), std::move(reactions));
+    rdme::reaction_diffusion_model model(std::move(domain), std::move(reactions));
 
-    const auto generator_begin = Clock::now();
-    rdme::RestrictedGenerator generator(std::move(model), num::array<int>{1, 1},
-                                        num::array<double>{problem.reaction_rate});
-    const auto generator_end = Clock::now();
+    const auto generator_begin = clock::now();
+    rdme::restricted_generator generator(std::move(model), num::array<int>{1, 1},
+                                         num::array<double>{problem.reaction_rate});
+    const auto generator_end = clock::now();
     const double generator_setup_ms = milliseconds(generator_begin, generator_end);
-    rdme::ShiftedGenerator system(generator, problem.shift);
+    rdme::shifted_generator system(generator, problem.shift);
 
-    num::idx joint_sector = rdme::ReactionStateSpace::npos;
+    num::idx joint_sector = rdme::reaction_state_space::npos;
     for (num::idx sector = 0; sector < generator.state_space().n_sectors(); ++sector) {
         if (generator.state_space().sector_totals()[sector] == num::array<int>({1, 1})) {
             joint_sector = sector;
             break;
         }
     }
-    if (joint_sector == rdme::ReactionStateSpace::npos)
+    if (joint_sector == rdme::reaction_state_space::npos)
         throw std::logic_error("two-particle sector is absent");
     const num::idx joint_begin = generator.state_space().sector_offsets()[joint_sector];
     const num::idx joint_end = generator.state_space().sector_offsets()[joint_sector + 1];
     const num::idx vacuum = generator.state_space().find(
-        rdme::Configuration(generator.state_space().layout().size(), 0));
+        rdme::configuration(generator.state_space().layout().size(), 0));
     num::vec reaction_rates(generator.rows(), 0.0);
     for (num::idx state = joint_begin; state < joint_end; ++state) {
         const auto &configuration = generator.state_space()[state];
@@ -357,10 +355,10 @@ void run_case(const Case &problem) {
         }
     }
 
-    const auto multigrid_begin = Clock::now();
-    rdme::SectorDiffusionMultigrid multigrid(generator.model().domain(), generator.state_space(),
-                                             problem.shift);
-    const auto multigrid_end = Clock::now();
+    const auto multigrid_begin = clock::now();
+    rdme::sector_diffusion_multigrid multigrid(generator.model().domain(), generator.state_space(),
+                                               problem.shift);
+    const auto multigrid_end = clock::now();
     const double multigrid_setup_ms = milliseconds(multigrid_begin, multigrid_end);
     const num::gmres_options options{.tolerance = 1e-9,
                                      .max_iterations = 1000,
@@ -370,15 +368,15 @@ void run_case(const Case &problem) {
     for (const bool separated : {false, true}) {
         const num::idx a_voxel = 0;
         const num::idx b_voxel = separated ? voxels - 1 : 0;
-        rdme::Configuration initial(generator.state_space().layout().size(), 0);
+        rdme::configuration initial(generator.state_space().layout().size(), 0);
         initial[generator.state_space().layout().index(a_voxel, 0)] = 1;
         initial[generator.state_space().layout().index(b_voxel, 1)] = 1;
         num::vec rhs(generator.rows(), 0.0);
         rhs[generator.state_space().find(initial)] = 1.0;
 
-        const Observation plain = solve_plain(system, rhs, vacuum, joint_begin, joint_end,
+        const observation plain = solve_plain(system, rhs, vacuum, joint_begin, joint_end,
                                               problem.shift, reaction_rates, options);
-        const Observation accelerated =
+        const observation accelerated =
             solve(system, multigrid, rhs, vacuum, joint_begin, joint_end, problem.shift,
                   reaction_rates, options, multigrid_setup_ms, multigrid.max_hierarchy_levels());
         const double reference =
@@ -395,7 +393,7 @@ void run_case(const Case &problem) {
     }
 }
 
-void dispatch(const Case &problem) {
+void dispatch(const benchmark_case &problem) {
     if (problem.dimension == 1)
         return run_case<1>(problem);
     if (problem.dimension == 2)
@@ -405,15 +403,15 @@ void dispatch(const Case &problem) {
     throw std::invalid_argument("annihilation benchmark dimension must be 1, 2, or 3");
 }
 
-std::vector<Case> quick_cases() {
+num::array<benchmark_case> quick_cases() {
     return {{1, 16, 1.0, 1.0, 0.5}, {2, 4, 1.0, 1.0, 0.5}, {3, 2, 1.0, 1.0, 0.5}};
 }
 
-std::vector<Case> paper_cases() {
-    std::vector<Case> cases;
+num::array<benchmark_case> paper_cases() {
+    num::array<benchmark_case> cases;
     const auto add = [&](int dimension, num::idx cells, double diffusion, double reaction,
                          double shift) {
-        const Case candidate{dimension, cells, diffusion, reaction, shift};
+        const benchmark_case candidate{dimension, cells, diffusion, reaction, shift};
         if (std::find(cases.begin(), cases.end(), candidate) == cases.end())
             cases.push_back(candidate);
     };
@@ -461,7 +459,7 @@ int main(int argc, char **argv) {
                  "preconditioner_setup_ms,solve_ms,iterations,residual,converged,"
                  "annihilation_time_laplace_transform,vacuum_transform,survival_transform,"
                  "probability_identity_error,vacuum_flux_error,absolute_transform_difference\n";
-    for (const Case &problem : quick ? quick_cases() : paper_cases())
+    for (const benchmark_case &problem : quick ? quick_cases() : paper_cases())
         dispatch(problem);
     if (make_plots)
         save_plots();

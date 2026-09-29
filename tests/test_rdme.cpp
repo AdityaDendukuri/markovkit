@@ -9,7 +9,7 @@
 
 void test_structured_voxel_domain() {
     num::structured_grid_graph<2> grid({3, 2}, {0.5, 2.0});
-    rdme::VoxelDomain domain(std::move(grid), std::vector<double>{0.25, 1.0});
+    rdme::voxel_domain domain(std::move(grid), num::array<double>{0.25, 1.0});
 
     assert(domain.n_voxels() == 6);
     assert(domain.n_species() == 2);
@@ -25,8 +25,8 @@ void test_structured_voxel_domain() {
 void test_explicit_graph_voxel_domain() {
     num::graph graph(2);
     graph.add_edge(0, 1, 3.0);
-    rdme::VoxelDomain domain(std::move(graph), std::vector<double>{2.0, 4.0},
-                             std::vector<double>{0.5});
+    rdme::voxel_domain domain(std::move(graph), num::array<double>{2.0, 4.0},
+                              num::array<double>{0.5});
 
     const auto edge_from_zero = domain.graph().neighbors(0)[0];
     const auto edge_from_one = domain.graph().neighbors(1)[0];
@@ -36,23 +36,22 @@ void test_explicit_graph_voxel_domain() {
 
 void test_exact_cme_lift() {
     num::structured_grid_graph<1> grid({2}, {0.5});
-    rdme::VoxelDomain domain(std::move(grid), std::vector<double>{1.0});
+    rdme::voxel_domain domain(std::move(grid), num::array<double>{1.0});
 
-    cme::ReactionSystem local;
+    cme::reaction_system local;
     local.changes = {{1}};
-    local.propensities = {[](const markovkit::State &, const std::vector<double> &rates, double) {
-        return rates[0];
-    }};
+    local.propensities = {
+        [](const markovkit::state &, const num::array<double> &rates, double) { return rates[0]; }};
 
     const auto lifted = rdme::lift_to_cme(domain, local);
     assert(lifted.size() == 4); // two local births and two directed diffusion jumps
-    assert(lifted.changes[0] == markovkit::State({1, 0}));
-    assert(lifted.changes[1] == markovkit::State({0, 1}));
-    assert(lifted.changes[2] == markovkit::State({-1, 1}));
-    assert(lifted.changes[3] == markovkit::State({1, -1}));
+    assert(lifted.changes[0] == markovkit::state({1, 0}));
+    assert(lifted.changes[1] == markovkit::state({0, 1}));
+    assert(lifted.changes[2] == markovkit::state({-1, 1}));
+    assert(lifted.changes[3] == markovkit::state({1, -1}));
 
-    const markovkit::State state{3, 2};
-    const std::vector<double> rates{0.25};
+    const markovkit::state state{3, 2};
+    const num::array<double> rates{0.25};
     assert(std::abs(lifted.propensities[0](state, rates, 0.0) - 0.25) < 1e-15);
     // h=0.5: transmissibility=2, volume=0.5, hence rate 4 per molecule.
     assert(std::abs(lifted.propensities[2](state, rates, 0.0) - 12.0) < 1e-15);
@@ -61,8 +60,8 @@ void test_exact_cme_lift() {
 
 void test_exact_cme_lift_reports_reference_state_limit() {
     num::structured_grid_graph<1> grid({9});
-    rdme::VoxelDomain domain(std::move(grid), std::vector<double>{1.0});
-    cme::ReactionSystem local;
+    rdme::voxel_domain domain(std::move(grid), num::array<double>{1.0});
+    cme::reaction_system local;
 
     bool threw = false;
     try {
@@ -74,17 +73,17 @@ void test_exact_cme_lift_reports_reference_state_limit() {
 }
 
 void test_dynamic_diffusion_sectors_scale_past_cme_limit() {
-    rdme::DiffusionStateSpace k4(3, {4});
-    rdme::DiffusionStateSpace k8(3, {8});
-    rdme::DiffusionStateSpace k16(3, {16});
-    rdme::DiffusionStateSpace k64(3, {64});
+    rdme::diffusion_state_space k4(3, {4});
+    rdme::diffusion_state_space k8(3, {8});
+    rdme::diffusion_state_space k16(3, {16});
+    rdme::diffusion_state_space k64(3, {64});
     assert(k4.size() == 15);
     assert(k8.size() == 45);
     assert(k16.size() == 153);
     assert(k64.size() == 2145);
     assert(k16.layout().size() == 3);
 
-    rdme::DiffusionStateSpace two_species(2, {1, 2});
+    rdme::diffusion_state_space two_species(2, {1, 2});
     assert(two_species.size() == 6);
     for (const auto &state : two_species.states()) {
         assert(state[0] + state[2] == 1);
@@ -96,32 +95,32 @@ void test_dynamic_diffusion_sectors_scale_past_cme_limit() {
         assert(two_species.rank(two_species[state]) == state);
         assert(two_species.unrank(state) == two_species[state]);
     }
-    assert(two_species.find({2, 0, 0, 2}) == rdme::DiffusionStateSpace::npos);
+    assert(two_species.find({2, 0, 0, 2}) == rdme::diffusion_state_space::npos);
 
-    rdme::ReactionStateSpace reaction_space(3, {2, 2});
+    rdme::reaction_state_space reaction_space(3, {2, 2});
     for (num::idx state = 0; state < reaction_space.size(); ++state) {
         assert(reaction_space.find(reaction_space[state]) == state);
         const num::idx sector = reaction_space.sector(state);
         assert(state >= reaction_space.sector_offsets()[sector]);
         assert(state < reaction_space.sector_offsets()[sector + 1]);
     }
-    assert(reaction_space.find({3, 0, 0, 0, 0, 0}) == rdme::ReactionStateSpace::npos);
+    assert(reaction_space.find({3, 0, 0, 0, 0, 0}) == rdme::reaction_state_space::npos);
 }
 
 void test_cached_matrix_free_diffusion_generator() {
     num::structured_grid_graph<1> grid({3}, {0.5});
-    rdme::VoxelDomain domain(std::move(grid), std::vector<double>{0.25});
-    rdme::DiffusionGenerator generator(std::move(domain), num::array<int>{4});
+    rdme::voxel_domain domain(std::move(grid), num::array<double>{0.25});
+    rdme::diffusion_generator generator(std::move(domain), num::array<int>{4});
     static_assert(num::linear_operator<decltype(generator)>);
 
     assert(generator.rows() == 15);
-    const rdme::Configuration concentrated{4, 0, 0};
+    const rdme::configuration concentrated{4, 0, 0};
     const num::idx source = generator.state_space().find(concentrated);
-    assert(source != rdme::DiffusionStateSpace::npos);
+    assert(source != rdme::diffusion_state_space::npos);
 
     num::vec probability(generator.rows(), 0.0);
     probability[source] = 1.0;
-    rdme::GeneratorWorkspace workspace(generator.rows());
+    rdme::generator_workspace workspace(generator.rows());
     const num::vec &matrix_free = generator.apply(probability, workspace);
 
     // h=0.5 gives transmissibility 2 and volume 0.5: D*T/V = 1 per molecule.
@@ -145,19 +144,20 @@ void test_cached_matrix_free_diffusion_generator() {
 
 void test_reactions_couple_contiguous_population_sectors() {
     num::structured_grid_graph<1> grid({2}, {1.0});
-    rdme::VoxelDomain domain(std::move(grid), std::vector<double>{0.5});
-    num::array<rdme::LocalReaction> reactions{
-        rdme::LocalReaction{{1},
-                            [](std::span<const int>, std::span<const double> parameters,
-                               double volume, double) { return parameters[0] * volume; }},
-        rdme::LocalReaction{{-1},
-                            [](std::span<const int> counts, std::span<const double> parameters,
-                               double,
-                               double) { return parameters[1] * static_cast<double>(counts[0]); }}};
-    rdme::ReactionDiffusionModel model(std::move(domain), std::move(reactions));
-    rdme::RestrictedGenerator generator(std::move(model), num::array<int>{3},
-                                        num::array<double>{2.0, 0.25}, 0.0,
-                                        rdme::BoundaryMode::absorbing);
+    rdme::voxel_domain domain(std::move(grid), num::array<double>{0.5});
+    num::array<rdme::local_reaction> reactions{
+        rdme::local_reaction{{1},
+                             [](num::view<const int>, num::view<const double> parameters,
+                                double volume, double) { return parameters[0] * volume; }},
+        rdme::local_reaction{
+            {-1},
+            [](num::view<const int> counts, num::view<const double> parameters, double, double) {
+                return parameters[1] * static_cast<double>(counts[0]);
+            }}};
+    rdme::reaction_diffusion_model model(std::move(domain), std::move(reactions));
+    rdme::restricted_generator generator(std::move(model), num::array<int>{3},
+                                         num::array<double>{2.0, 0.25}, 0.0,
+                                         rdme::boundary_mode::absorbing);
     static_assert(num::linear_operator<decltype(generator)>);
 
     // For two voxels, sector k contains k+1 configurations.
@@ -185,15 +185,15 @@ void test_reactions_couple_contiguous_population_sectors() {
 
     const num::idx empty = generator.state_space().find({0, 0});
     const num::idx boundary = generator.state_space().find({3, 0});
-    assert(empty != rdme::ReactionStateSpace::npos);
-    assert(boundary != rdme::ReactionStateSpace::npos);
+    assert(empty != rdme::reaction_state_space::npos);
+    assert(boundary != rdme::reaction_state_space::npos);
     assert(std::abs(generator.exit_rates()[empty] - 4.0) < 1e-15);
     // 1.5 diffusion + 0.75 death + 4.0 birth loss through the truncation boundary.
     assert(std::abs(generator.exit_rates()[boundary] - 6.25) < 1e-15);
 
     num::vec probability(generator.rows(), 0.0);
     probability[boundary] = 1.0;
-    rdme::GeneratorWorkspace workspace(generator.rows());
+    rdme::generator_workspace workspace(generator.rows());
     const num::vec &matrix_free = generator.apply(probability, workspace);
     // Only the two out-of-box birth events lose mass from this absorbing truncation.
     assert(std::abs(std::accumulate(matrix_free.begin(), matrix_free.end(), 0.0) + 4.0) < 1e-15);
@@ -217,8 +217,8 @@ void test_reactions_couple_contiguous_population_sectors() {
 
 void test_population_conserving_recursive_multigrid() {
     num::structured_grid_graph<1> grid({8}, {1.0});
-    rdme::VoxelDomain domain(grid, std::vector<double>{1.0});
-    rdme::TwoLevelPopulationMultigrid multigrid(domain, num::array<int>{2}, 1.0);
+    rdme::voxel_domain domain(grid, num::array<double>{1.0});
+    rdme::two_level_population_multigrid multigrid(domain, num::array<int>{2}, 1.0);
     static_assert(num::linear_operator<decltype(multigrid)>);
 
     assert(multigrid.rows() == 36);
@@ -274,9 +274,9 @@ void test_population_conserving_recursive_multigrid() {
     // Aggregate-block relaxation exactly couples fine configurations that differ only by
     // particle redistribution inside one coarse voxel. It should improve this representative
     // cycle over point Jacobi while preserving the same hierarchy and transfer operators.
-    rdme::TwoLevelPopulationMultigrid block_multigrid(domain, num::array<int>{2}, 1.0, 2, 2,
-                                                      2.0 / 3.0, 4, 32, 1, 0,
-                                                      rdme::PopulationSmoother::aggregate_block);
+    rdme::two_level_population_multigrid block_multigrid(
+        domain, num::array<int>{2}, 1.0, 2, 2, 2.0 / 3.0, 4, 32, 1, 0,
+        rdme::population_smoother::aggregate_block);
     num::vec block_correction(block_multigrid.rows(), 0.0);
     num::vec block_image(block_multigrid.rows(), 0.0);
     block_multigrid.apply(rhs, block_correction);
@@ -289,8 +289,8 @@ void test_population_conserving_recursive_multigrid() {
     assert(block_residual_norm_squared < residual_norm_squared);
 
     // The same V-cycle can be applied independently to every reaction sector.
-    rdme::ReactionStateSpace reaction_space(8, {2});
-    rdme::SectorDiffusionMultigrid sector_multigrid(domain, reaction_space, 1.0);
+    rdme::reaction_state_space reaction_space(8, {2});
+    rdme::sector_diffusion_multigrid sector_multigrid(domain, reaction_space, 1.0);
     static_assert(num::linear_operator<decltype(sector_multigrid)>);
     assert(sector_multigrid.rows() == 45);
     assert(sector_multigrid.n_sectors() == 3);
@@ -303,23 +303,24 @@ void test_population_conserving_recursive_multigrid() {
 
 void test_sector_multigrid_preconditions_reaction_diffusion_resolvent() {
     num::structured_grid_graph<1> grid({4}, {1.0});
-    rdme::VoxelDomain domain(std::move(grid), std::vector<double>{4.0});
-    num::array<rdme::LocalReaction> reactions{
-        rdme::LocalReaction{{1},
-                            [](std::span<const int>, std::span<const double> parameters,
-                               double volume, double) { return parameters[0] * volume; }},
-        rdme::LocalReaction{{-1},
-                            [](std::span<const int> counts, std::span<const double> parameters,
-                               double,
-                               double) { return parameters[1] * static_cast<double>(counts[0]); }}};
-    rdme::ReactionDiffusionModel model(std::move(domain), std::move(reactions));
-    rdme::RestrictedGenerator generator(std::move(model), num::array<int>{3},
-                                        num::array<double>{0.05, 0.02}, 0.0,
-                                        rdme::BoundaryMode::absorbing);
+    rdme::voxel_domain domain(std::move(grid), num::array<double>{4.0});
+    num::array<rdme::local_reaction> reactions{
+        rdme::local_reaction{{1},
+                             [](num::view<const int>, num::view<const double> parameters,
+                                double volume, double) { return parameters[0] * volume; }},
+        rdme::local_reaction{
+            {-1},
+            [](num::view<const int> counts, num::view<const double> parameters, double, double) {
+                return parameters[1] * static_cast<double>(counts[0]);
+            }}};
+    rdme::reaction_diffusion_model model(std::move(domain), std::move(reactions));
+    rdme::restricted_generator generator(std::move(model), num::array<int>{3},
+                                         num::array<double>{0.05, 0.02}, 0.0,
+                                         rdme::boundary_mode::absorbing);
     constexpr double shift = 0.5;
-    rdme::ShiftedGenerator system(generator, shift);
-    rdme::SectorDiffusionMultigrid preconditioner(generator.model().domain(),
-                                                  generator.state_space(), shift);
+    rdme::shifted_generator system(generator, shift);
+    rdme::sector_diffusion_multigrid preconditioner(generator.model().domain(),
+                                                    generator.state_space(), shift);
     static_assert(num::linear_operator<decltype(system)>);
 
     num::vec rhs(generator.rows(), 0.0);
@@ -346,38 +347,38 @@ void test_sector_multigrid_preconditions_reaction_diffusion_resolvent() {
 
 void test_two_particle_annihilation_time_transform() {
     num::structured_grid_graph<1> grid({4}, {0.25});
-    rdme::VoxelDomain domain(std::move(grid), std::vector<double>{1.0, 1.0});
-    num::array<rdme::LocalReaction> reactions{rdme::LocalReaction{
+    rdme::voxel_domain domain(std::move(grid), num::array<double>{1.0, 1.0});
+    num::array<rdme::local_reaction> reactions{rdme::local_reaction{
         {-1, -1},
-        [](std::span<const int> counts, std::span<const double> parameters, double volume, double) {
+        [](num::view<const int> counts, num::view<const double> parameters, double volume, double) {
             return parameters[0] * static_cast<double>(counts[0] * counts[1]) / volume;
         }}};
-    rdme::ReactionDiffusionModel model(std::move(domain), std::move(reactions));
-    rdme::RestrictedGenerator generator(std::move(model), num::array<int>{1, 1},
-                                        num::array<double>{2.0});
+    rdme::reaction_diffusion_model model(std::move(domain), std::move(reactions));
+    rdme::restricted_generator generator(std::move(model), num::array<int>{1, 1},
+                                         num::array<double>{2.0});
     assert(generator.rows() == 25); // 1 + V + V + V^2
 
     constexpr double shift = 0.5;
-    rdme::ShiftedGenerator system(generator, shift);
-    rdme::SectorDiffusionMultigrid multigrid(generator.model().domain(), generator.state_space(),
-                                             shift);
+    rdme::shifted_generator system(generator, shift);
+    rdme::sector_diffusion_multigrid multigrid(generator.model().domain(), generator.state_space(),
+                                               shift);
     const num::gmres_options options{
         .tolerance = 1e-12, .max_iterations = 100, .restart = generator.rows()};
 
-    num::idx joint_sector = rdme::ReactionStateSpace::npos;
+    num::idx joint_sector = rdme::reaction_state_space::npos;
     for (num::idx sector = 0; sector < generator.state_space().n_sectors(); ++sector) {
         if (generator.state_space().sector_totals()[sector] == num::array<int>({1, 1})) {
             joint_sector = sector;
             break;
         }
     }
-    assert(joint_sector != rdme::ReactionStateSpace::npos);
+    assert(joint_sector != rdme::reaction_state_space::npos);
     const num::idx joint_begin = generator.state_space().sector_offsets()[joint_sector];
     const num::idx joint_end = generator.state_space().sector_offsets()[joint_sector + 1];
-    const num::idx vacuum = generator.state_space().find(rdme::Configuration(8, 0));
+    const num::idx vacuum = generator.state_space().find(rdme::configuration(8, 0));
 
     const auto transform = [&](std::size_t a_voxel, std::size_t b_voxel) {
-        rdme::Configuration initial(8, 0);
+        rdme::configuration initial(8, 0);
         initial[generator.state_space().layout().index(a_voxel, 0)] = 1;
         initial[generator.state_space().layout().index(b_voxel, 1)] = 1;
         num::vec rhs(generator.rows(), 0.0);

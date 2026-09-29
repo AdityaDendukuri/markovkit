@@ -12,13 +12,13 @@ namespace rdme {
 /// Matrix-free operator A = shift I - Q retaining a live reference to Q.
 /// Rate refreshes on the underlying generator are therefore visible immediately.
 template <class Generator>
-class ShiftedGenerator {
+class shifted_generator {
   public:
     using domain_type = num::vec;
     using codomain_type = num::vec;
     using math_laws = num::math::type_list<num::law::linear_map>;
 
-    ShiftedGenerator(const Generator &generator, double shift)
+    shifted_generator(const Generator &generator, double shift)
         : generator_(&generator), shift_(shift), generator_image_(generator.rows(), 0.0) {
         if (!(shift_ > 0.0) || !std::isfinite(shift_)) {
             throw std::invalid_argument("RDME generator shift must be finite and positive");
@@ -47,6 +47,6 @@ class ShiftedGenerator {
 };
 
 template <class Generator>
-ShiftedGenerator(const Generator &, double) -> ShiftedGenerator<Generator>;
+shifted_generator(const Generator &, double) -> shifted_generator<Generator>;
 
 } // namespace rdme

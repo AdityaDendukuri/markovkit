@@ -4,5 +4,5 @@
 
 namespace fsp {
 using cme::build_generator;
-using cme::GeneratorResult;
+using cme::generator_result;
 } // namespace fsp

@@ -3,6 +3,7 @@
 #pragma once
 
 #include "container/vector.hpp"
+#include "core/types.hpp"
 #include "linear/sparse/sparse.hpp"
 #include "rdme/diffusion_generator.hpp"
 #include "rdme/reaction_diffusion_model.hpp"
@@ -11,32 +12,31 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
-#include <span>
 #include <stdexcept>
 #include <utility>
 
 namespace rdme {
 
-enum class BoundaryMode { reflecting, absorbing };
+enum class boundary_mode { reflecting, absorbing };
 
-template <VoxelGraph Graph>
-class RestrictedGenerator {
+template <voxel_graph Graph>
+class restricted_generator {
   public:
     using domain_type = num::vec;
     using codomain_type = num::vec;
     using math_laws = num::math::type_list<num::law::linear_map>;
 
-    struct Transition {
+    struct transition {
         num::idx destination{};
         double rate{};
     };
 
-    RestrictedGenerator(ReactionDiffusionModel<Graph> model, num::array<int> max_totals,
-                        num::array<double> parameters = {}, double time = 0.0,
-                        BoundaryMode boundary_mode = BoundaryMode::absorbing)
+    restricted_generator(reaction_diffusion_model<Graph> model, num::array<int> max_totals,
+                         num::array<double> parameters = {}, double time = 0.0,
+                         boundary_mode mode = boundary_mode::absorbing)
         : model_(std::move(model)),
           state_space_(static_cast<std::size_t>(model_.domain().n_voxels()), std::move(max_totals)),
-          parameters_(std::move(parameters)), time_(time), boundary_mode_(boundary_mode),
+          parameters_(std::move(parameters)), time_(time), boundary_mode_(mode),
           source_offsets_(state_space_.size() + 1, 0),
           diffusion_exit_rates_(state_space_.size(), 0.0), exit_rates_(state_space_.size(), 0.0) {
         build_topology();
@@ -45,19 +45,19 @@ class RestrictedGenerator {
 
     [[nodiscard]] num::idx rows() const noexcept { return state_space_.size(); }
     [[nodiscard]] num::idx cols() const noexcept { return state_space_.size(); }
-    [[nodiscard]] const ReactionDiffusionModel<Graph> &model() const noexcept { return model_; }
-    [[nodiscard]] const ReactionStateSpace &state_space() const noexcept { return state_space_; }
+    [[nodiscard]] const reaction_diffusion_model<Graph> &model() const noexcept { return model_; }
+    [[nodiscard]] const reaction_state_space &state_space() const noexcept { return state_space_; }
     [[nodiscard]] const num::array<num::idx> &source_offsets() const noexcept {
         return source_offsets_;
     }
-    [[nodiscard]] const num::array<Transition> &transitions() const noexcept {
+    [[nodiscard]] const num::array<transition> &transitions() const noexcept {
         return transitions_;
     }
     [[nodiscard]] const num::array<double> &exit_rates() const noexcept { return exit_rates_; }
     [[nodiscard]] double time() const noexcept { return time_; }
 
     /// Re-evaluate reaction propensities without rebuilding states or transition destinations.
-    void refresh(std::span<const double> parameters, double time) {
+    void refresh(num::view<const double> parameters, double time) {
         if (parameters.size() != parameters_.size()) {
             throw std::invalid_argument(
                 "RDME parameter count cannot change after generator construction");
@@ -69,9 +69,9 @@ class RestrictedGenerator {
         exit_rates_ = diffusion_exit_rates_;
         const auto &layout = state_space_.layout();
 
-        for (const ReactionEvent &event : reaction_events_) {
-            const Configuration &state = state_space_[event.source];
-            const auto local_counts = std::span<const int>(
+        for (const reaction_event &event : reaction_events_) {
+            const configuration &state = state_space_[event.source];
+            const auto local_counts = num::view<const int>(
                 state.data() + layout.index(event.voxel, 0), layout.species_count());
             const auto &reaction = model_.reactions()[event.reaction];
             const double rate = reaction.propensity(
@@ -103,7 +103,7 @@ class RestrictedGenerator {
         }
     }
 
-    [[nodiscard]] const num::vec &apply(const num::vec &x, GeneratorWorkspace &workspace) const {
+    [[nodiscard]] const num::vec &apply(const num::vec &x, generator_workspace &workspace) const {
         apply(x, workspace.output());
         return workspace.output();
     }
@@ -132,7 +132,7 @@ class RestrictedGenerator {
   private:
     static constexpr num::idx no_transition = std::numeric_limits<num::idx>::max();
 
-    struct ReactionEvent {
+    struct reaction_event {
         num::idx source{};
         num::idx transition{no_transition};
         std::size_t voxel{};
@@ -143,7 +143,7 @@ class RestrictedGenerator {
         const auto &domain = model_.domain();
         const auto &layout = state_space_.layout();
         for (num::idx source_state = 0; source_state < state_space_.size(); ++source_state) {
-            const Configuration &state = state_space_[source_state];
+            const configuration &state = state_space_[source_state];
 
             for (typename Graph::index_type source_voxel = 0; source_voxel < domain.n_voxels();
                  ++source_voxel) {
@@ -155,12 +155,12 @@ class RestrictedGenerator {
                         const int molecules = state[source_coordinate];
                         if (molecules == 0)
                             continue;
-                        Configuration destination = state;
+                        configuration destination = state;
                         --destination[source_coordinate];
                         ++destination[layout.index(static_cast<std::size_t>(destination_voxel),
                                                    species)];
                         const num::idx destination_state = state_space_.find(destination);
-                        if (destination_state == ReactionStateSpace::npos) {
+                        if (destination_state == reaction_state_space::npos) {
                             throw std::logic_error("diffusion left its RDME population sector");
                         }
                         const double rate = static_cast<double>(molecules) *
@@ -174,7 +174,7 @@ class RestrictedGenerator {
             for (std::size_t voxel = 0; voxel < layout.voxel_count(); ++voxel) {
                 for (std::size_t reaction_index = 0; reaction_index < model_.n_reactions();
                      ++reaction_index) {
-                    Configuration destination = state;
+                    configuration destination = state;
                     bool physically_valid = true;
                     for (std::size_t species = 0; species < layout.species_count(); ++species) {
                         int &count = destination[layout.index(voxel, species)];
@@ -185,12 +185,12 @@ class RestrictedGenerator {
                         continue;
 
                     const num::idx destination_state = state_space_.find(destination);
-                    if (destination_state != ReactionStateSpace::npos) {
+                    if (destination_state != reaction_state_space::npos) {
                         const num::idx transition = transitions_.size();
                         transitions_.push_back({destination_state, 0.0});
                         reaction_events_.push_back(
                             {source_state, transition, voxel, reaction_index});
-                    } else if (boundary_mode_ == BoundaryMode::absorbing) {
+                    } else if (boundary_mode_ == boundary_mode::absorbing) {
                         reaction_events_.push_back(
                             {source_state, no_transition, voxel, reaction_index});
                     }
@@ -200,20 +200,20 @@ class RestrictedGenerator {
         }
     }
 
-    ReactionDiffusionModel<Graph> model_;
-    ReactionStateSpace state_space_;
+    reaction_diffusion_model<Graph> model_;
+    reaction_state_space state_space_;
     num::array<double> parameters_;
     double time_ = 0.0;
-    BoundaryMode boundary_mode_ = BoundaryMode::absorbing;
+    boundary_mode boundary_mode_ = boundary_mode::absorbing;
     num::array<num::idx> source_offsets_;
-    num::array<Transition> transitions_;
-    num::array<ReactionEvent> reaction_events_;
+    num::array<transition> transitions_;
+    num::array<reaction_event> reaction_events_;
     num::array<double> diffusion_exit_rates_;
     num::array<double> exit_rates_;
 };
 
 template <class Graph>
-RestrictedGenerator(ReactionDiffusionModel<Graph>, num::array<int>, num::array<double>, double,
-                    BoundaryMode) -> RestrictedGenerator<Graph>;
+restricted_generator(reaction_diffusion_model<Graph>, num::array<int>, num::array<double>, double,
+                     boundary_mode) -> restricted_generator<Graph>;
 
 } // namespace rdme

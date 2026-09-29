@@ -1,25 +1,23 @@
+#include "core/types.hpp"
 #include "linear/solvers/ilu.hpp"
 #include "linear/solvers/math_gmres.hpp"
 #include "linear/solvers/preconditioner.hpp"
 #include "rdme/rdme.hpp"
 #include "structures/graph/structured_grid.hpp"
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <limits>
-#include <span>
 #include <stdexcept>
 #include <string_view>
-#include <vector>
 
 namespace {
 
-using Clock = std::chrono::steady_clock;
+using clock = std::chrono::steady_clock;
 
-struct Case {
+struct benchmark_case {
     int dimension;
     num::idx cells_per_axis;
     int max_population;
@@ -27,10 +25,10 @@ struct Case {
     double reaction_scale;
     double shift;
 
-    bool operator==(const Case &) const = default;
+    bool operator==(const benchmark_case &) const = default;
 };
 
-double milliseconds(Clock::time_point begin, Clock::time_point end) {
+double milliseconds(clock::time_point begin, clock::time_point end) {
     return std::chrono::duration<double, std::milli>(end - begin).count();
 }
 
@@ -45,7 +43,7 @@ double relative_difference(const num::vec &solution, const num::vec &reference) 
     return std::sqrt(difference_squared / std::max(reference_squared, 1e-300));
 }
 
-void emit_row(const Case &problem, num::idx voxels, num::idx states, std::size_t levels,
+void emit_row(const benchmark_case &problem, num::idx voxels, num::idx states, std::size_t levels,
               std::string_view method, double generator_setup_ms, double preconditioner_setup_ms,
               double solve_ms, const num::solver_result &result, double solution_difference) {
     std::cout << problem.dimension << ',' << problem.cells_per_axis << ',' << voxels << ','
@@ -57,34 +55,35 @@ void emit_row(const Case &problem, num::idx voxels, num::idx states, std::size_t
 }
 
 template <std::size_t D>
-void run_case(const Case &problem) {
-    std::array<num::idx, D> dimensions{};
+void run_case(const benchmark_case &problem) {
+    num::static_array<num::idx, D> dimensions{};
     dimensions.fill(problem.cells_per_axis);
-    std::array<double, D> spacing{};
+    num::static_array<double, D> spacing{};
     spacing.fill(1.0 / static_cast<double>(problem.cells_per_axis));
     num::structured_grid_graph<D> grid(dimensions, spacing);
-    rdme::VoxelDomain domain(std::move(grid), std::vector<double>{problem.diffusivity});
+    rdme::voxel_domain domain(std::move(grid), num::array<double>{problem.diffusivity});
 
-    num::array<rdme::LocalReaction> reactions{
-        rdme::LocalReaction{{1},
-                            [](std::span<const int>, std::span<const double> parameters,
-                               double volume, double) { return parameters[0] * volume; }},
-        rdme::LocalReaction{{-1},
-                            [](std::span<const int> counts, std::span<const double> parameters,
-                               double,
-                               double) { return parameters[1] * static_cast<double>(counts[0]); }}};
-    rdme::ReactionDiffusionModel model(std::move(domain), std::move(reactions));
+    num::array<rdme::local_reaction> reactions{
+        rdme::local_reaction{{1},
+                             [](num::view<const int>, num::view<const double> parameters,
+                                double volume, double) { return parameters[0] * volume; }},
+        rdme::local_reaction{
+            {-1},
+            [](num::view<const int> counts, num::view<const double> parameters, double, double) {
+                return parameters[1] * static_cast<double>(counts[0]);
+            }}};
+    rdme::reaction_diffusion_model model(std::move(domain), std::move(reactions));
 
-    const auto generator_begin = Clock::now();
-    rdme::RestrictedGenerator generator(
+    const auto generator_begin = clock::now();
+    rdme::restricted_generator generator(
         std::move(model), num::array<int>{problem.max_population},
         num::array<double>{0.05 * problem.reaction_scale, 0.02 * problem.reaction_scale}, 0.0,
-        rdme::BoundaryMode::absorbing);
-    const auto generator_end = Clock::now();
+        rdme::boundary_mode::absorbing);
+    const auto generator_end = clock::now();
     const double generator_setup_ms = milliseconds(generator_begin, generator_end);
     const num::idx voxels = generator.model().domain().n_voxels();
 
-    rdme::ShiftedGenerator system(generator, problem.shift);
+    rdme::shifted_generator system(generator, problem.shift);
     num::vec rhs(generator.rows(), 0.0);
     for (num::idx state = 0; state < rhs.size(); ++state) {
         rhs[state] = 1.0 + 0.1 * std::cos(static_cast<double>(state));
@@ -94,26 +93,26 @@ void run_case(const Case &problem) {
                                      .restart = std::min<num::idx>(50, generator.rows())};
 
     num::vec plain_solution(generator.rows(), 0.0);
-    const auto plain_begin = Clock::now();
+    const auto plain_begin = clock::now();
     const auto plain = num::gmres(system, rhs, plain_solution, options);
-    const auto plain_end = Clock::now();
+    const auto plain_end = clock::now();
     const double plain_solve_ms = milliseconds(plain_begin, plain_end);
 
-    const auto jacobi_begin = Clock::now();
+    const auto jacobi_begin = clock::now();
     num::vec inverse_diagonal(generator.rows(), 0.0);
     for (num::idx state = 0; state < generator.rows(); ++state) {
         inverse_diagonal[state] = 1.0 / (problem.shift + generator.exit_rates()[state]);
     }
     num::jacobi_preconditioner jacobi(std::move(inverse_diagonal));
-    const auto jacobi_end = Clock::now();
+    const auto jacobi_end = clock::now();
     num::vec jacobi_solution(generator.rows(), 0.0);
-    const auto jacobi_solve_begin = Clock::now();
+    const auto jacobi_solve_begin = clock::now();
     const auto jacobi_result = num::gmres(system, jacobi, rhs, jacobi_solution, options);
-    const auto jacobi_solve_end = Clock::now();
+    const auto jacobi_solve_end = clock::now();
     const double jacobi_setup_ms = milliseconds(jacobi_begin, jacobi_end);
     const double jacobi_solve_ms = milliseconds(jacobi_solve_begin, jacobi_solve_end);
 
-    const auto ilu_begin = Clock::now();
+    const auto ilu_begin = clock::now();
     num::array<num::idx> matrix_rows;
     num::array<num::idx> matrix_columns;
     num::array<double> matrix_values;
@@ -134,22 +133,22 @@ void run_case(const Case &problem) {
     const num::spmat sparse_system = num::spmat::from_triplets(
         generator.rows(), generator.cols(), matrix_rows, matrix_columns, matrix_values);
     const num::ilu0_preconditioner ilu(sparse_system);
-    const auto ilu_end = Clock::now();
+    const auto ilu_end = clock::now();
     num::vec ilu_solution(generator.rows(), 0.0);
-    const auto ilu_solve_begin = Clock::now();
+    const auto ilu_solve_begin = clock::now();
     const auto ilu_result = num::gmres(system, ilu, rhs, ilu_solution, options);
-    const auto ilu_solve_end = Clock::now();
+    const auto ilu_solve_end = clock::now();
     const double ilu_setup_ms = milliseconds(ilu_begin, ilu_end);
     const double ilu_solve_ms = milliseconds(ilu_solve_begin, ilu_solve_end);
 
-    const auto multigrid_begin = Clock::now();
-    rdme::SectorDiffusionMultigrid multigrid(generator.model().domain(), generator.state_space(),
-                                             problem.shift);
-    const auto multigrid_end = Clock::now();
+    const auto multigrid_begin = clock::now();
+    rdme::sector_diffusion_multigrid multigrid(generator.model().domain(), generator.state_space(),
+                                               problem.shift);
+    const auto multigrid_end = clock::now();
     num::vec multigrid_solution(generator.rows(), 0.0);
-    const auto multigrid_solve_begin = Clock::now();
+    const auto multigrid_solve_begin = clock::now();
     const auto multigrid_result = num::gmres(system, multigrid, rhs, multigrid_solution, options);
-    const auto multigrid_solve_end = Clock::now();
+    const auto multigrid_solve_end = clock::now();
     const double multigrid_setup_ms = milliseconds(multigrid_begin, multigrid_end);
     const double multigrid_solve_ms = milliseconds(multigrid_solve_begin, multigrid_solve_end);
 
@@ -178,7 +177,7 @@ void run_case(const Case &problem) {
              difference(multigrid_solution, multigrid_result.converged));
 }
 
-void dispatch(const Case &problem) {
+void dispatch(const benchmark_case &problem) {
     if (problem.dimension == 1)
         return run_case<1>(problem);
     if (problem.dimension == 2)
@@ -188,7 +187,7 @@ void dispatch(const Case &problem) {
     throw std::invalid_argument("RDME benchmark dimension must be 1, 2, or 3");
 }
 
-std::vector<Case> quick_cases() {
+num::array<benchmark_case> quick_cases() {
     return {{1, 4, 3, 4.0, 1.0, 0.5},
             {1, 8, 3, 4.0, 1.0, 0.5},
             {1, 16, 3, 4.0, 1.0, 0.5},
@@ -196,11 +195,11 @@ std::vector<Case> quick_cases() {
             {3, 2, 2, 4.0, 1.0, 0.5}};
 }
 
-std::vector<Case> paper_cases() {
-    std::vector<Case> cases;
+num::array<benchmark_case> paper_cases() {
+    num::array<benchmark_case> cases;
     const auto add = [&](int dimension, num::idx cells, int population, double diffusion,
                          double reaction, double shift) {
-        const Case candidate{dimension, cells, population, diffusion, reaction, shift};
+        const benchmark_case candidate{dimension, cells, population, diffusion, reaction, shift};
         if (std::find(cases.begin(), cases.end(), candidate) == cases.end()) {
             cases.push_back(candidate);
         }
@@ -220,7 +219,8 @@ std::vector<Case> paper_cases() {
         add(3, 4, population, 4.0, 1.0, 0.5);
 
     for (const auto [dimension, cells, population] :
-         {std::array<int, 3>{1, 16, 3}, std::array<int, 3>{2, 8, 2}, std::array<int, 3>{3, 4, 2}}) {
+         {num::static_array<int, 3>{1, 16, 3}, num::static_array<int, 3>{2, 8, 2},
+          num::static_array<int, 3>{3, 4, 2}}) {
         for (double diffusion : {0.1, 1.0, 10.0, 100.0})
             add(dimension, cells, population, diffusion, 1.0, 0.5);
         for (double reaction : {0.01, 0.1, 1.0, 10.0})
@@ -253,7 +253,7 @@ int main(int argc, char **argv) {
                  "reaction_scale,shift,levels,method,generator_setup_ms,"
                  "preconditioner_setup_ms,solve_ms,iterations,residual,converged,"
                  "relative_solution_difference\n";
-    for (const Case &problem : quick ? quick_cases() : paper_cases())
+    for (const benchmark_case &problem : quick ? quick_cases() : paper_cases())
         dispatch(problem);
     return 0;
 }

@@ -7,23 +7,22 @@
 #include <cstddef>
 #include <functional>
 #include <initializer_list>
-#include <span>
 #include <stdexcept>
 
 namespace rdme {
 
 /// Dynamic voxel-major molecule counts, independent of the small fixed-capacity CME state.
-class Configuration {
+class configuration {
   public:
-    Configuration() = default;
+    configuration() = default;
 
-    explicit Configuration(std::size_t size, int value = 0) : counts_(size, value) {
+    explicit configuration(std::size_t size, int value = 0) : counts_(size, value) {
         validate_nonnegative();
     }
 
-    Configuration(std::initializer_list<int> counts) : counts_(counts) { validate_nonnegative(); }
+    configuration(std::initializer_list<int> counts) : counts_(counts) { validate_nonnegative(); }
 
-    explicit Configuration(std::span<const int> counts) : counts_(counts.begin(), counts.end()) {
+    explicit configuration(num::view<const int> counts) : counts_(counts.begin(), counts.end()) {
         validate_nonnegative();
     }
 
@@ -38,7 +37,7 @@ class Configuration {
     [[nodiscard]] int operator[](std::size_t index) const noexcept { return counts_[index]; }
     [[nodiscard]] int &operator[](std::size_t index) noexcept { return counts_[index]; }
 
-    [[nodiscard]] bool operator==(const Configuration &) const noexcept = default;
+    [[nodiscard]] bool operator==(const configuration &) const noexcept = default;
 
   private:
     void validate_nonnegative() const {
@@ -50,8 +49,8 @@ class Configuration {
     num::array<int> counts_;
 };
 
-struct ConfigurationHash {
-    [[nodiscard]] std::size_t operator()(const Configuration &state) const noexcept {
+struct configuration_hash {
+    [[nodiscard]] std::size_t operator()(const configuration &state) const noexcept {
         std::size_t seed = state.size();
         for (int count : state) {
             const auto value = static_cast<std::size_t>(count);

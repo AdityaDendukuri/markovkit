@@ -1,30 +1,28 @@
+#include "core/types.hpp"
 #include "plot/plot.hpp"
 #include "rdme/rdme.hpp"
 #include "structures/graph/structured_grid.hpp"
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <iomanip>
 #include <iostream>
 #include <limits>
 #include <random>
-#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace {
 
-struct Case {
+struct benchmark_case {
     int dimension;
     num::idx cells_per_axis;
     int population;
     double shift;
 };
 
-struct Result {
-    Case problem;
+struct result {
+    benchmark_case problem;
     num::idx voxels;
     num::idx states;
     std::size_t levels;
@@ -42,16 +40,16 @@ struct Result {
     double variable_vcycle_factor;
 };
 
-std::vector<Result> results;
+num::array<result> results;
 
-double weighted_norm(std::span<const double> x, std::span<const double> stationary) {
+double weighted_norm(num::view<const double> x, num::view<const double> stationary) {
     double squared = 0.0;
     for (std::size_t state = 0; state < x.size(); ++state)
         squared += x[state] * x[state] / stationary[state];
     return std::sqrt(squared);
 }
 
-void normalize(num::vec &x, std::span<const double> stationary) {
+void normalize(num::vec &x, num::view<const double> stationary) {
     const double norm = weighted_norm(x, stationary);
     if (!(norm > 0.0) || !std::isfinite(norm))
         throw std::runtime_error("RDME multigrid analysis encountered a zero error vector");
@@ -59,7 +57,7 @@ void normalize(num::vec &x, std::span<const double> stationary) {
         value /= norm;
 }
 
-num::vec stationary_distribution(const rdme::DiffusionStateSpace &space) {
+num::vec stationary_distribution(const rdme::diffusion_state_space &space) {
     const auto &layout = space.layout();
     num::vec stationary(space.size(), 0.0);
     for (num::idx state = 0; state < space.size(); ++state) {
@@ -94,7 +92,7 @@ void remove_coarse_component(const Transfer &transfer, num::vec &fine, num::vec 
 }
 
 template <typename Apply, typename Project>
-double estimate_asymptotic_factor(num::idx size, std::span<const double> stationary, Apply apply,
+double estimate_asymptotic_factor(num::idx size, num::view<const double> stationary, Apply apply,
                                   Project project, std::uint64_t seed, int iterations = 50,
                                   int probes = 3) {
     std::mt19937_64 engine(seed);
@@ -134,27 +132,29 @@ double estimate_asymptotic_factor(num::idx size, std::span<const double> station
 }
 
 template <std::size_t D>
-void run_case(const Case &problem) {
-    std::array<num::idx, D> dimensions{};
+void run_case(const benchmark_case &problem) {
+    num::static_array<num::idx, D> dimensions{};
     dimensions.fill(problem.cells_per_axis);
-    std::array<double, D> spacing{};
+    num::static_array<double, D> spacing{};
     spacing.fill(1.0 / static_cast<double>(problem.cells_per_axis));
     num::structured_grid_graph<D> graph(dimensions, spacing);
-    rdme::VoxelDomain domain(std::move(graph), std::vector<double>{1.0});
+    rdme::voxel_domain domain(std::move(graph), num::array<double>{1.0});
     const num::array<int> totals{problem.population};
 
-    rdme::PopulationMultigrid<D> multigrid(domain, totals, problem.shift);
-    rdme::PopulationMultigrid<D> block_multigrid(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 4,
-                                                 32, 1, 0,
-                                                 rdme::PopulationSmoother::aggregate_block);
-    rdme::PopulationMultigrid<D> block_wcycle(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 4, 32,
-                                              2, 0, rdme::PopulationSmoother::aggregate_block);
-    rdme::PopulationMultigrid<D> wcycle(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 4, 32, 2);
-    rdme::PopulationMultigrid<D> variable_vcycle(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 4,
-                                                 32, 1, 4);
-    rdme::PopulationMultigrid<D> two_grid(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 1, 2);
-    rdme::PopulationMultigrid<D> block_two_grid(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 1,
-                                                2, 1, 0, rdme::PopulationSmoother::aggregate_block);
+    rdme::population_multigrid<D> multigrid(domain, totals, problem.shift);
+    rdme::population_multigrid<D> block_multigrid(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 4,
+                                                  32, 1, 0,
+                                                  rdme::population_smoother::aggregate_block);
+    rdme::population_multigrid<D> block_wcycle(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 4,
+                                               32, 2, 0,
+                                               rdme::population_smoother::aggregate_block);
+    rdme::population_multigrid<D> wcycle(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 4, 32, 2);
+    rdme::population_multigrid<D> variable_vcycle(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 4,
+                                                  32, 1, 4);
+    rdme::population_multigrid<D> two_grid(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 1, 2);
+    rdme::population_multigrid<D> block_two_grid(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 1,
+                                                 2, 1, 0,
+                                                 rdme::population_smoother::aggregate_block);
     if (!two_grid.has_coarse_level())
         throw std::logic_error("RDME two-grid analysis case has no coarse level");
 
@@ -277,7 +277,7 @@ void run_case(const Case &problem) {
         generator.rows(), stationary, apply_variable_vcycle, no_projection,
         0xf719ULL + problem.cells_per_axis * 31 + problem.population);
 
-    Result result{problem,
+    result result{problem,
                   generator.domain().n_voxels(),
                   generator.rows(),
                   multigrid.n_levels(),
@@ -305,7 +305,7 @@ void run_case(const Case &problem) {
     std::cout.flush();
 }
 
-void dispatch(const Case &problem) {
+void dispatch(const benchmark_case &problem) {
     if (problem.dimension == 1)
         return run_case<1>(problem);
     if (problem.dimension == 2)
@@ -313,12 +313,12 @@ void dispatch(const Case &problem) {
     throw std::invalid_argument("RDME multigrid analysis dimension must be 1 or 2");
 }
 
-std::vector<Case> quick_cases() {
+num::array<benchmark_case> quick_cases() {
     return {{1, 8, 1, 0.5}, {1, 8, 2, 0.5}, {1, 8, 4, 0.5}, {1, 16, 2, 0.5}, {2, 4, 2, 0.5}};
 }
 
-std::vector<Case> paper_cases() {
-    std::vector<Case> cases;
+num::array<benchmark_case> paper_cases() {
+    num::array<benchmark_case> cases;
     for (int population : {1, 2, 3, 4, 6})
         cases.push_back({1, 8, population, 0.5});
     for (int population : {1, 2, 3, 4})
@@ -340,7 +340,7 @@ void save_plot() {
     num::plt::subplot(1, 3);
     for (int population : {1, 2, 3, 4, 6}) {
         num::series values;
-        for (const Result &result : results) {
+        for (const result &result : results) {
             if (result.problem.dimension == 1 && result.problem.population == population)
                 values.store(static_cast<double>(result.states), result.smoothing_factor_one);
         }
@@ -358,7 +358,7 @@ void save_plot() {
 
     for (int population : {1, 2, 3, 4, 6}) {
         num::series values;
-        for (const Result &result : results) {
+        for (const result &result : results) {
             if (result.problem.dimension == 1 && result.problem.population == population)
                 values.store(static_cast<double>(result.states), result.vcycle_factor);
         }
@@ -376,7 +376,7 @@ void save_plot() {
 
     for (int population : {1, 2, 3, 4, 6}) {
         num::series values;
-        for (const Result &result : results) {
+        for (const result &result : results) {
             if (result.problem.dimension == 1 && result.problem.population == population)
                 values.store(static_cast<double>(result.states), result.block_vcycle_factor);
         }
@@ -420,7 +420,7 @@ int main(int argc, char **argv) {
                  "block_two_grid_factor,vcycle_factor,block_vcycle_factor,block_wcycle_factor,"
                  "wcycle_factor,"
                  "variable_vcycle_factor\n";
-    for (const Case &problem : quick ? quick_cases() : paper_cases())
+    for (const benchmark_case &problem : quick ? quick_cases() : paper_cases())
         dispatch(problem);
     if (plot)
         save_plot();

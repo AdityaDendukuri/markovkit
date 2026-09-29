@@ -1,18 +1,18 @@
 #pragma once
 #include "cme/boundary.hpp"
 #include "cme/reaction_system.hpp"
-#include <vector>
+#include "core/types.hpp"
 
 namespace fsp {
 
 /// Chemical master equation initial-value problem on a finite domain.
-struct FSPProblem {
-    cme::ReactionSystem model;
-    markovkit::State u0;
+struct fsp_problem {
+    cme::reaction_system model;
+    markovkit::state u0;
     double t0 = 0.0;
     double tf = 0.0;
-    std::vector<double> rates;
-    cme::BoundaryCondition bc;
+    num::array<double> rates;
+    cme::boundary_condition bc;
 };
 
 } // namespace fsp

@@ -1,26 +1,26 @@
 #include "cme/generator.hpp"
-#include <vector>
+#include "core/types.hpp"
 
 namespace cme {
 
-GeneratorResult build_generator(const StateSpace &sp, const ReactionSystem &model,
-                                const std::vector<double> &rates, double t, bool absorbing) {
+generator_result build_generator(const state_space &sp, const reaction_system &model,
+                                 const num::array<double> &rates, double t, bool absorbing) {
     int n = sp.size();
     model.validate();
 
-    std::vector<num::idx> rows, cols;
-    std::vector<num::real> vals;
+    num::array<num::idx> rows, cols;
+    num::array<num::real> vals;
     rows.reserve(static_cast<std::size_t>(n) * (model.size() + 1));
     cols.reserve(rows.capacity());
     vals.reserve(rows.capacity());
 
-    std::vector<double> exit_rate_boundary(n, 0.0);
-    std::vector<double> diag(n, 0.0);
-    std::vector<markovkit::BoundaryTransition> boundary;
+    num::vec exit_rate_boundary(static_cast<num::idx>(n), 0.0);
+    num::vec diag(static_cast<num::idx>(n), 0.0);
+    num::array<markovkit::boundary_transition> boundary;
 
     // Assemble column-oriented jumps and record exits.
     for (int j = 0; j < n; ++j) {
-        const markovkit::State &x = sp.states[j];
+        const markovkit::state &x = sp.states[j];
         double col_sum = 0.0;
 
         // Each enabled reaction contributes one jump from this source state.
@@ -30,7 +30,7 @@ GeneratorResult build_generator(const StateSpace &sp, const ReactionSystem &mode
                 continue;
             }
 
-            markovkit::State y = x + model.changes[k];
+            markovkit::state y = x + model.changes[k];
             auto it = sp.index.find(y);
             if (it != sp.index.end()) {
                 int i = it->second;
@@ -56,15 +56,15 @@ GeneratorResult build_generator(const StateSpace &sp, const ReactionSystem &mode
         }
     }
 
-    num::spmat A = num::spmat::from_triplets(
-        static_cast<num::idx>(n), static_cast<num::idx>(n), rows, cols, vals);
+    num::spmat A = num::spmat::from_triplets(static_cast<num::idx>(n), static_cast<num::idx>(n),
+                                             rows, cols, vals);
 
     // Boundary metadata supports truncation control and ELSE exits.
     return {std::move(A), std::move(exit_rate_boundary), std::move(diag), std::move(boundary)};
 }
 
-RestrictedGenerator restrict_cme(const StateSpace &states, const ReactionSystem &model,
-                                 const std::vector<double> &rates, double time) {
+restricted_generator restrict_cme(const state_space &states, const reaction_system &model,
+                                  const num::array<double> &rates, double time) {
     // Keep boundary loss in the restricted generator diagonal.
     auto assembled = build_generator(states, model, rates, time, true);
     return {states.states, states.index, std::move(assembled.matrix), std::move(assembled.boundary),

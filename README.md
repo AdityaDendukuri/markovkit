@@ -8,24 +8,29 @@ subnetwork elimination (ELSE).
 ## Methods
 
 - **FSP**
-  - `AdaptiveFSP`: flux-controlled state-space growth
-  - `KrylovFSP`: Krylov propagation with the Vo–Sidje mass-loss criterion
-- **ELSE**
-  - `else_trajectory` and `else_ensemble`: sampled subnetwork evolution
-  - `density_subnetworks`: deterministic boundary-density propagation
-  - `TalbotDensitySolver`: density recovery from shifted resolvent solves
+  - `solve_adaptive_fsp`: flux-controlled state-space growth
+  - `solve_krylov_fsp`: Krylov propagation with the Vo–Sidje mass-loss criterion
+- **ELSE** (header-only, tracks the [else](../else) paper code)
+  - `restriction` / `make_subnetwork`: restricted generators with dense,
+    block-tridiagonal, or symmetrized Cholesky factorizations
+  - `entrance_law`: occupation moments shared by every trajectory at one entrance
+  - `shedding_state` / `score_states`: expected-entries, exact, and probed cut-time shedding
+  - `else_ensemble`: labeled ensembles with Woodbury factor reuse between macrosteps
+  - `make_density_chain` / `inverse_laplace_density`: Talbot density recovery
+    from shifted resolvent solves
+  - `laplacian_subnetwork` / `laplacian_else_trajectory`: reversible graph Laplacians
 - **SSA**
   - `gillespie`: exact direct-method simulation
   - `tau_leaping`: approximate Poisson tau-leaping
 - **RDME**
-  - `VoxelDomain`: structured or unstructured finite-volume diffusion geometry
-  - `DiffusionStateSpace`: dynamic fixed-population sectors beyond the CME state limit
-  - `DiffusionGenerator`: cached, allocation-free matrix-free generator application
-  - `ReactionStateSpace`: contiguous unions of population sectors exposing block structure
-  - `RestrictedGenerator`: cached reaction-diffusion topology with allocation-free rate refresh
-  - `PopulationTransfer`: conservative voxel aggregation and multinomial population lifting
-  - `PopulationMultigrid`: recursive Petrov–Galerkin V-cycle for shifted diffusion sectors
-  - `SectorDiffusionMultigrid`: block preconditioner for full reaction-diffusion GMRES solves
+  - `voxel_domain`: structured or unstructured finite-volume diffusion geometry
+  - `diffusion_state_space`: dynamic fixed-population sectors beyond the CME state limit
+  - `diffusion_generator`: cached, allocation-free matrix-free generator application
+  - `reaction_state_space`: contiguous unions of population sectors exposing block structure
+  - `restricted_generator`: cached reaction-diffusion topology with allocation-free rate refresh
+  - `population_transfer`: conservative voxel aggregation and multinomial population lifting
+  - `population_multigrid`: recursive Petrov–Galerkin V-cycle for shifted diffusion sectors
+  - `sector_diffusion_multigrid`: block preconditioner for full reaction-diffusion GMRES solves
   - `lift_to_cme`: exact event lift for small problems and solver verification
 
 MarkovKit uses [Numerics](../numerics) for matrices, factorizations, resolvent
@@ -35,10 +40,16 @@ be adjacent when building from source.
 Shared CME types live under `cme/`: reaction systems, finite state spaces,
 generator restrictions, and reversible representations. `fsp/`, `ssa/`, and
 `else/` contain method-specific policies and algorithms. The legacy
-`fsp/{boundary,generator,state_space}.hpp`, `markovkit/reaction_system.hpp`, and
-`else/else_solver.hpp` headers remain as forwarding compatibility headers.
+`fsp/{boundary,generator,state_space}.hpp` and `markovkit/reaction_system.hpp`
+headers remain as forwarding compatibility headers.
 
-`ReactionSystem` centralizes propensity evaluation. Shared distribution and
+Every name is `snake_case`, matching Numerics; only template parameters
+(`State`, `Graph`, `Solver`) keep CamelCase. Storage uses Numerics' container
+vocabulary: `num::array<T>` where a sequence grows, `num::vec`/`num::mat` for
+fixed-length numeric data, `num::view<T>` for non-owning windows, and
+`num::table`/`num::sorted_table`/`num::key_set` for hashed and ordered lookup.
+
+`reaction_system` centralizes propensity evaluation. Shared distribution and
 trajectory utilities provide species means, marginals, component extraction,
 and observation-time lookup without duplicating loops in solvers or examples.
 
@@ -56,13 +67,7 @@ ctest --test-dir build --output-on-failure
 | --- | --- | --- |
 | `fsp_oregonator` | Adaptive FSP for the field–Körös–Noyes oscillator | `fsp_oregonator.png` |
 | `fsp_toggle_switch` | Adaptive FSP for a bistable genetic switch | `fsp_toggle_switch.png` |
-| `else_oregonator` | Fixed-step ELSE and SSA trajectory ensembles | `oregonator_else_ssa.png` |
-| `else_birth_death` | ELSE trajectory for a birth–death process | `else_birth_death.png` |
 | `ssa_birth_death` | Gillespie SSA and tau-leaping comparison | `ssa_birth_death.png` |
-| `michaelis_menten` | FSP and dense Talbot-density comparison | `michaelis_menten.png` |
-| `density_laplacian` | Talbot density evolution on a graph | `density_laplacian.png` |
-| `laplacian_trajectories` | Reversible ELSE trajectories using dense Cholesky | `laplacian_trajectories.png` |
-| `dense_cholesky_cme` | Dense Cholesky occupation solve for a reversible CME | `dense_cholesky_cme.png` |
 | `rdme_multigrid_benchmark` | Plain and multigrid-preconditioned RDME GMRES scaling | CSV on stdout |
 | `rdme_two_particle_annihilation` | Resolvent statistics for diffusing `A + B -> empty` | CSV and optional PNG figures |
 | `rdme_multigrid_analysis` | Smoothing and two-grid analysis on fixed-population configuration graphs | CSV and optional PNG figure |
@@ -70,11 +75,6 @@ ctest --test-dir build --output-on-failure
 Run an example from the repository root after building:
 
 ```bash
-./build/examples/else_oregonator
-./build/examples/michaelis_menten
-./build/examples/density_laplacian
-./build/examples/laplacian_trajectories
-./build/examples/dense_cholesky_cme
 ./build/examples/rdme_multigrid_benchmark > rdme_multigrid_results.csv
 # Fast 1D/2D/3D validation subset:
 ./build/examples/rdme_multigrid_benchmark --quick
@@ -112,9 +112,11 @@ children of one coarse voxel; trivial blocks are skipped and residuals are
 updated sparsely.  Norms use the inverse-multinomial stationary weight, the
 natural reversible norm for probability errors in a fixed diffusion sector.
 
-`density_laplacian` reads `laplacians/cs-medium.json`. The JSON object must
-contain the sparse symmetric matrix `L`, the stationary square root `h`, and
-the five-column committor matrix `C`.
+ELSE examples (Oregonator and toggle-switch ensembles, Laplacian densities and
+trajectories) live in the adjacent [else](../else) repository, which builds
+against MarkovKit. The `laplacians/*.json` inputs they read are kept here; each
+JSON object contains the sparse symmetric matrix `L`, the stationary square root
+`h`, and the five-column committor matrix `C`.
 
 PNG rendering requires `gnuplot`.
 

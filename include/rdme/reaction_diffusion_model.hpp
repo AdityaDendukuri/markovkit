@@ -6,28 +6,27 @@
 #include "rdme/voxel_domain.hpp"
 #include <cstddef>
 #include <functional>
-#include <span>
 #include <stdexcept>
 #include <utility>
 
 namespace rdme {
 
-using LocalPropensity =
-    std::function<double(std::span<const int>, std::span<const double>, double, double)>;
+using local_propensity =
+    std::function<double(num::view<const int>, num::view<const double>, double, double)>;
 
 /// One reaction acting independently in every voxel.
 ///
 /// The propensity receives local molecule counts, model parameters, voxel
 /// volume, and time. Stoichiometry has one entry per species.
-struct LocalReaction {
+struct local_reaction {
     num::array<int> change;
-    LocalPropensity propensity;
+    local_propensity propensity;
 };
 
-template <VoxelGraph Graph>
-class ReactionDiffusionModel {
+template <voxel_graph Graph>
+class reaction_diffusion_model {
   public:
-    ReactionDiffusionModel(VoxelDomain<Graph> domain, num::array<LocalReaction> reactions)
+    reaction_diffusion_model(voxel_domain<Graph> domain, num::array<local_reaction> reactions)
         : domain_(std::move(domain)), reactions_(std::move(reactions)) {
         for (const auto &reaction : reactions_) {
             if (reaction.change.size() != domain_.n_species()) {
@@ -40,18 +39,20 @@ class ReactionDiffusionModel {
         }
     }
 
-    [[nodiscard]] const VoxelDomain<Graph> &domain() const noexcept { return domain_; }
-    [[nodiscard]] const num::array<LocalReaction> &reactions() const noexcept { return reactions_; }
+    [[nodiscard]] const voxel_domain<Graph> &domain() const noexcept { return domain_; }
+    [[nodiscard]] const num::array<local_reaction> &reactions() const noexcept {
+        return reactions_;
+    }
     [[nodiscard]] std::size_t n_species() const noexcept { return domain_.n_species(); }
     [[nodiscard]] std::size_t n_reactions() const noexcept { return reactions_.size(); }
 
   private:
-    VoxelDomain<Graph> domain_;
-    num::array<LocalReaction> reactions_;
+    voxel_domain<Graph> domain_;
+    num::array<local_reaction> reactions_;
 };
 
 template <class Graph>
-ReactionDiffusionModel(VoxelDomain<Graph>, num::array<LocalReaction>)
-    -> ReactionDiffusionModel<Graph>;
+reaction_diffusion_model(voxel_domain<Graph>, num::array<local_reaction>)
+    -> reaction_diffusion_model<Graph>;
 
 } // namespace rdme

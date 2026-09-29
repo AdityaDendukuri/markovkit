@@ -1,14 +1,14 @@
 #pragma once
+#include "core/types.hpp"
 #include "fsp/problem.hpp"
 #include "fsp/solution.hpp"
 #include <functional>
 #include <tuple>
-#include <vector>
 
 namespace fsp {
 
 /// Parameters for the mass-controlled Krylov-FSP method of Vo and Sidje.
-struct KrylovFSPParams {
+struct krylov_fsp_params {
     double eps = 1e-6;            // error tolerance
     double tau_init = 1.0;        // initial step
     double droptol = 1e-10;       // probability pruning threshold
@@ -26,17 +26,17 @@ struct KrylovFSPParams {
 };
 
 /// Accepted step sizes, retained mass, and rejected-step count.
-struct KrylovFSPDiagnostics {
-    std::vector<double> tau_log;
-    std::vector<double> mass_log;
-    std::vector<double> time_log;
-    std::vector<int> size_log;
+struct krylov_fsp_diagnostics {
+    num::array<double> tau_log;
+    num::array<double> mass_log;
+    num::array<double> time_log;
+    num::array<int> size_log;
     int reject_count = 0;
     int total_iters = 0;
 };
 
 /// Solve the CME with adaptive support and Krylov exponential propagation.
-std::tuple<FSPSolution, KrylovFSPDiagnostics> solve_krylov_fsp(const FSPProblem &prob,
-                                                               const KrylovFSPParams &params = {});
+std::tuple<fsp_solution, krylov_fsp_diagnostics>
+solve_krylov_fsp(const fsp_problem &prob, const krylov_fsp_params &params = {});
 
 } // namespace fsp

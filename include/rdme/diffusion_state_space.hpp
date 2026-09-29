@@ -8,7 +8,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <limits>
-#include <span>
 #include <stdexcept>
 
 namespace rdme {
@@ -17,9 +16,9 @@ namespace rdme {
 ///
 /// Diffusion never leaves this state space. With V voxels and totals k_s, its
 /// size is the product of binomial(k_s + V - 1, V - 1).
-class DiffusionStateSpace {
+class diffusion_state_space {
   public:
-    DiffusionStateSpace(std::size_t voxel_count, num::array<int> species_totals)
+    diffusion_state_space(std::size_t voxel_count, num::array<int> species_totals)
         : layout_(voxel_count, species_totals.size()), species_totals_(std::move(species_totals)) {
         if (std::any_of(species_totals_.begin(), species_totals_.end(),
                         [](int total) { return total < 0; })) {
@@ -29,38 +28,38 @@ class DiffusionStateSpace {
         const std::size_t expected = expected_size(voxel_count, species_totals_);
         states_.reserve(expected);
 
-        Configuration state(layout_.size(), 0);
+        configuration state(layout_.size(), 0);
         enumerate_species(0, state);
         if (states_.size() != expected) {
             throw std::logic_error("RDME sector enumeration produced an inconsistent size");
         }
     }
 
-    [[nodiscard]] const StateLayout &layout() const noexcept { return layout_; }
+    [[nodiscard]] const state_layout &layout() const noexcept { return layout_; }
     [[nodiscard]] std::size_t size() const noexcept { return states_.size(); }
     [[nodiscard]] bool empty() const noexcept { return states_.empty(); }
     [[nodiscard]] const num::array<int> &species_totals() const noexcept { return species_totals_; }
-    [[nodiscard]] const num::array<Configuration> &states() const noexcept { return states_; }
-    [[nodiscard]] const Configuration &operator[](std::size_t index) const {
+    [[nodiscard]] const num::array<configuration> &states() const noexcept { return states_; }
+    [[nodiscard]] const configuration &operator[](std::size_t index) const {
         return states_.at(index);
     }
 
-    [[nodiscard]] num::idx find(const Configuration &state) const {
+    [[nodiscard]] num::idx find(const configuration &state) const {
         return rank_configuration(layout_, species_totals_, state);
     }
 
     /// Rank a configuration in the same mixed-radix order used by enumeration.
     /// No hash table or allocation is required.
-    [[nodiscard]] num::idx rank(const Configuration &state) const { return find(state); }
+    [[nodiscard]] num::idx rank(const configuration &state) const { return find(state); }
 
     /// Recover a configuration from its rank without consulting the stored state array.
-    [[nodiscard]] Configuration unrank(num::idx index) const {
+    [[nodiscard]] configuration unrank(num::idx index) const {
         return unrank_configuration(layout_, species_totals_, index);
     }
 
-    [[nodiscard]] static num::idx rank_configuration(const StateLayout &layout,
-                                                     std::span<const int> species_totals,
-                                                     const Configuration &state) {
+    [[nodiscard]] static num::idx rank_configuration(const state_layout &layout,
+                                                     num::view<const int> species_totals,
+                                                     const configuration &state) {
         if (species_totals.size() != layout.species_count() || state.size() != layout.size()) {
             return npos;
         }
@@ -91,8 +90,8 @@ class DiffusionStateSpace {
         return rank;
     }
 
-    [[nodiscard]] static Configuration unrank_configuration(const StateLayout &layout,
-                                                            std::span<const int> species_totals,
+    [[nodiscard]] static configuration unrank_configuration(const state_layout &layout,
+                                                            num::view<const int> species_totals,
                                                             num::idx index) {
         const num::idx size = expected_size(layout.voxel_count(), species_totals);
         if (species_totals.size() != layout.species_count() || index >= size) {
@@ -106,7 +105,7 @@ class DiffusionStateSpace {
             index /= radix;
         }
 
-        Configuration state(layout.size(), 0);
+        configuration state(layout.size(), 0);
         for (std::size_t species = 0; species < layout.species_count(); ++species) {
             int remaining = species_totals[species];
             num::idx rank = composition_ranks[species];
@@ -129,7 +128,7 @@ class DiffusionStateSpace {
     }
 
     [[nodiscard]] static std::size_t expected_size(std::size_t voxel_count,
-                                                   std::span<const int> species_totals) {
+                                                   num::view<const int> species_totals) {
         if (voxel_count == 0 || species_totals.empty()) {
             throw std::invalid_argument("RDME sectors need at least one voxel and species");
         }
@@ -168,7 +167,7 @@ class DiffusionStateSpace {
         return result;
     }
 
-    void enumerate_species(std::size_t species, Configuration &state) {
+    void enumerate_species(std::size_t species, configuration &state) {
         if (species == layout_.species_count()) {
             states_.push_back(state);
             return;
@@ -177,7 +176,7 @@ class DiffusionStateSpace {
     }
 
     void enumerate_compositions(std::size_t species, std::size_t voxel, int remaining,
-                                Configuration &state) {
+                                configuration &state) {
         if (voxel + 1 == layout_.voxel_count()) {
             state[layout_.index(voxel, species)] = remaining;
             enumerate_species(species + 1, state);
@@ -189,9 +188,9 @@ class DiffusionStateSpace {
         }
     }
 
-    StateLayout layout_;
+    state_layout layout_;
     num::array<int> species_totals_;
-    num::array<Configuration> states_;
+    num::array<configuration> states_;
 };
 
 } // namespace rdme

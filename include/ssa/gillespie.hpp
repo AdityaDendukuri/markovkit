@@ -1,5 +1,6 @@
 #pragma once
 
+#include "core/types.hpp"
 #include "markovkit/reaction_system.hpp"
 #include "markovkit/trajectory.hpp"
 #include <algorithm>
@@ -7,26 +8,25 @@
 #include <cstdint>
 #include <limits>
 #include <random>
-#include <vector>
 
 namespace ssa {
 
 /// Gillespie's exact direct stochastic simulation method templated over PRNG.
 template <typename rng_state = std::mt19937_64>
-inline markovkit::Trajectory
-gillespie(const markovkit::ReactionSystem &model, const std::vector<double> &rates,
-          const markovkit::State &initial, double t0, double tf, rng_state &rng,
+inline markovkit::trajectory
+gillespie(const markovkit::reaction_system &model, const num::array<double> &rates,
+          const markovkit::state &initial, double t0, double tf, rng_state &rng,
           std::size_t maximum_steps = std::numeric_limits<std::size_t>::max()) {
     std::uniform_real_distribution<double> uniform(0.0, 1.0);
 
     model.validate();
-    markovkit::Trajectory path;
+    markovkit::trajectory path;
     path.times.push_back(t0);
     path.states.push_back(initial);
 
-    markovkit::State current = initial;
+    markovkit::state current = initial;
     double t = t0;
-    std::vector<double> prop(model.size(), 0.0);
+    num::vec prop(model.size(), 0.0);
 
     // Recompute propensities after every reaction event.
     while (t < tf && path.reactions.size() < maximum_steps) {
@@ -60,9 +60,9 @@ gillespie(const markovkit::ReactionSystem &model, const std::vector<double> &rat
 }
 
 /// Seed-based overload for backward compatibility.
-inline markovkit::Trajectory
-gillespie(const markovkit::ReactionSystem &model, const std::vector<double> &rates,
-          const markovkit::State &initial, double t0, double tf, int seed = 42,
+inline markovkit::trajectory
+gillespie(const markovkit::reaction_system &model, const num::array<double> &rates,
+          const markovkit::state &initial, double t0, double tf, int seed = 42,
           std::size_t maximum_steps = std::numeric_limits<std::size_t>::max()) {
     std::mt19937 rng(static_cast<unsigned int>(seed));
     return gillespie<std::mt19937>(model, rates, initial, t0, tf, rng, maximum_steps);

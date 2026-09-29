@@ -4,6 +4,7 @@
 
 #include "container/matrix.hpp"
 #include "container/vector.hpp"
+#include "core/types.hpp"
 #include "linear/factorization/lu.hpp"
 #include "rdme/diffusion_generator.hpp"
 #include "rdme/reaction_state_space.hpp"
@@ -14,11 +15,8 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
-#include <span>
 #include <stdexcept>
-#include <unordered_map>
 #include <utility>
-#include <vector>
 
 namespace rdme {
 
@@ -29,12 +27,12 @@ namespace rdme {
 /// the fine children. Consequently R P = I, both maps preserve total probability,
 /// and neither map changes a species total.
 template <std::size_t D, typename Weight = double, std::integral Index = num::idx>
-class PopulationTransfer {
+class population_transfer {
   public:
     using graph_type = num::structured_grid_graph<D, Weight, Index>;
 
-    PopulationTransfer(const graph_type &fine_graph, const DiffusionStateSpace &fine_space,
-                       num::array<int> species_totals)
+    population_transfer(const graph_type &fine_graph, const diffusion_state_space &fine_space,
+                        num::array<int> species_totals)
         : coarse_graph_(make_coarse_graph(fine_graph)),
           coarse_space_(static_cast<std::size_t>(coarse_graph_.n_vertices()),
                         std::move(species_totals)),
@@ -49,7 +47,7 @@ class PopulationTransfer {
     [[nodiscard]] num::idx fine_size() const noexcept { return fine_to_coarse_.size(); }
     [[nodiscard]] num::idx coarse_size() const noexcept { return coarse_space_.size(); }
     [[nodiscard]] const graph_type &coarse_graph() const noexcept { return coarse_graph_; }
-    [[nodiscard]] const DiffusionStateSpace &coarse_state_space() const noexcept {
+    [[nodiscard]] const diffusion_state_space &coarse_state_space() const noexcept {
         return coarse_space_;
     }
     [[nodiscard]] const num::array<num::idx> &fine_to_coarse() const noexcept {
@@ -60,7 +58,7 @@ class PopulationTransfer {
     }
     [[nodiscard]] const num::array<Index> &voxel_parent() const noexcept { return voxel_parent_; }
 
-    void restrict(std::span<const double> fine, std::span<double> coarse) const {
+    void restrict(num::view<const double> fine, num::view<double> coarse) const {
         check_dimensions(fine.size(), coarse.size());
         std::fill(coarse.begin(), coarse.end(), 0.0);
         for (num::idx state = 0; state < fine_size(); ++state) {
@@ -68,7 +66,7 @@ class PopulationTransfer {
         }
     }
 
-    void prolong(std::span<const double> coarse, std::span<double> fine) const {
+    void prolong(num::view<const double> coarse, num::view<double> fine) const {
         check_dimensions(fine.size(), coarse.size());
         for (num::idx state = 0; state < fine_size(); ++state) {
             fine[state] = prolongation_weights_[state] * coarse[fine_to_coarse_[state]];
@@ -97,7 +95,7 @@ class PopulationTransfer {
         return graph_type(dimensions, spacing, fine.boundaries());
     }
 
-    void build(const graph_type &fine_graph, const DiffusionStateSpace &fine_space) {
+    void build(const graph_type &fine_graph, const diffusion_state_space &fine_space) {
         const auto &fine_layout = fine_space.layout();
         const auto &coarse_layout = coarse_space_.layout();
         voxel_parent_.resize(static_cast<std::size_t>(fine_graph.n_vertices()));
@@ -117,8 +115,8 @@ class PopulationTransfer {
 
         num::array<double> coarse_weight_sum(coarse_size(), 0.0);
         for (num::idx fine_state = 0; fine_state < fine_space.size(); ++fine_state) {
-            const Configuration &fine_configuration = fine_space[fine_state];
-            Configuration coarse_configuration(coarse_layout.size(), 0);
+            const configuration &fine_configuration = fine_space[fine_state];
+            configuration coarse_configuration(coarse_layout.size(), 0);
             for (std::size_t fine_voxel = 0; fine_voxel < fine_layout.voxel_count(); ++fine_voxel) {
                 const std::size_t coarse_voxel =
                     static_cast<std::size_t>(voxel_parent_[fine_voxel]);
@@ -129,7 +127,7 @@ class PopulationTransfer {
             }
 
             const num::idx coarse_state = coarse_space_.find(coarse_configuration);
-            if (coarse_state == DiffusionStateSpace::npos) {
+            if (coarse_state == diffusion_state_space::npos) {
                 throw std::logic_error("RDME aggregation changed a conserved population");
             }
             fine_to_coarse_[fine_state] = coarse_state;
@@ -170,13 +168,13 @@ class PopulationTransfer {
     }
 
     graph_type coarse_graph_;
-    DiffusionStateSpace coarse_space_;
+    diffusion_state_space coarse_space_;
     num::array<Index> voxel_parent_;
     num::array<num::idx> fine_to_coarse_;
     num::array<double> prolongation_weights_;
 };
 
-enum class PopulationSmoother { weighted_jacobi, aggregate_block };
+enum class population_smoother { weighted_jacobi, aggregate_block };
 
 /// A recursive geometric V-cycle for a shifted fixed-sector diffusion operator.
 ///
@@ -185,23 +183,23 @@ enum class PopulationSmoother { weighted_jacobi, aggregate_block };
 /// is assembled and factored. On a uniform factor-two grid, doubling diffusivity
 /// on every coarse level is exactly the conservative Petrov--Galerkin operator R A P.
 template <std::size_t D, typename Weight = double, std::integral Index = num::idx>
-class TwoLevelPopulationMultigrid {
+class two_level_population_multigrid {
   public:
     using graph_type = num::structured_grid_graph<D, Weight, Index>;
     using domain_type = num::vec;
     using codomain_type = num::vec;
     using math_laws = num::math::type_list<num::law::linear_map>;
 
-    TwoLevelPopulationMultigrid(VoxelDomain<graph_type> domain, num::array<int> species_totals,
-                                double shift, std::size_t pre_sweeps = 2,
-                                std::size_t post_sweeps = 2, double jacobi_weight = 2.0 / 3.0,
-                                num::idx coarse_max_states = 4, std::size_t max_levels = 32,
-                                std::size_t coarse_cycles = 1, std::size_t sweep_growth = 0,
-                                PopulationSmoother smoother = PopulationSmoother::weighted_jacobi)
-        : TwoLevelPopulationMultigrid(PrivateTag{}, std::move(domain), std::move(species_totals),
-                                      shift, pre_sweeps, post_sweeps, jacobi_weight,
-                                      coarse_max_states, max_levels, coarse_cycles, sweep_growth,
-                                      smoother, 1) {}
+    two_level_population_multigrid(
+        voxel_domain<graph_type> domain, num::array<int> species_totals, double shift,
+        std::size_t pre_sweeps = 2, std::size_t post_sweeps = 2, double jacobi_weight = 2.0 / 3.0,
+        num::idx coarse_max_states = 4, std::size_t max_levels = 32, std::size_t coarse_cycles = 1,
+        std::size_t sweep_growth = 0,
+        population_smoother smoother = population_smoother::weighted_jacobi)
+        : two_level_population_multigrid(private_tag{}, std::move(domain),
+                                         std::move(species_totals), shift, pre_sweeps, post_sweeps,
+                                         jacobi_weight, coarse_max_states, max_levels,
+                                         coarse_cycles, sweep_growth, smoother, 1) {}
 
     [[nodiscard]] num::idx rows() const noexcept { return fine_generator_.rows(); }
     [[nodiscard]] num::idx cols() const noexcept { return fine_generator_.cols(); }
@@ -218,13 +216,13 @@ class TwoLevelPopulationMultigrid {
     [[nodiscard]] bool has_coarse_level() const noexcept {
         return static_cast<bool>(coarse_level_);
     }
-    [[nodiscard]] const TwoLevelPopulationMultigrid *coarse_level() const noexcept {
+    [[nodiscard]] const two_level_population_multigrid *coarse_level() const noexcept {
         return coarse_level_.get();
     }
-    [[nodiscard]] const DiffusionGenerator<graph_type> &fine_generator() const noexcept {
+    [[nodiscard]] const diffusion_generator<graph_type> &fine_generator() const noexcept {
         return fine_generator_;
     }
-    [[nodiscard]] const PopulationTransfer<D, Weight, Index> &transfer() const {
+    [[nodiscard]] const population_transfer<D, Weight, Index> &transfer() const {
         if (!transfer_)
             throw std::logic_error("terminal RDME multigrid level has no transfer");
         return *transfer_;
@@ -258,7 +256,7 @@ class TwoLevelPopulationMultigrid {
 
     void apply(const num::vec &x, num::vec &y) const { apply_block(x, y); }
 
-    void apply_block(std::span<const double> x, std::span<double> y) const {
+    void apply_block(num::view<const double> x, num::view<double> y) const {
         if (x.size() != rows() || y.size() != rows()) {
             throw std::invalid_argument("RDME multigrid vector size mismatch");
         }
@@ -297,15 +295,15 @@ class TwoLevelPopulationMultigrid {
     }
 
   private:
-    struct PrivateTag {};
+    struct private_tag {};
 
-    TwoLevelPopulationMultigrid(PrivateTag, VoxelDomain<graph_type> domain,
-                                num::array<int> species_totals, double shift,
-                                std::size_t pre_sweeps, std::size_t post_sweeps,
-                                double jacobi_weight, num::idx coarse_max_states,
-                                std::size_t max_levels, std::size_t coarse_cycles,
-                                std::size_t sweep_growth, PopulationSmoother smoother,
-                                std::size_t level)
+    two_level_population_multigrid(private_tag, voxel_domain<graph_type> domain,
+                                   num::array<int> species_totals, double shift,
+                                   std::size_t pre_sweeps, std::size_t post_sweeps,
+                                   double jacobi_weight, num::idx coarse_max_states,
+                                   std::size_t max_levels, std::size_t coarse_cycles,
+                                   std::size_t sweep_growth, population_smoother smoother,
+                                   std::size_t level)
         : fine_generator_(std::move(domain), species_totals), shift_(checked_shift(shift)),
           pre_sweeps_(pre_sweeps), post_sweeps_(post_sweeps),
           jacobi_weight_(checked_jacobi_weight(jacobi_weight)), coarse_cycles_(coarse_cycles),
@@ -323,19 +321,19 @@ class TwoLevelPopulationMultigrid {
         }
         if (rows() > coarse_max_states && level < max_levels &&
             can_coarsen(fine_generator_.domain().graph())) {
-            transfer_ = std::make_unique<PopulationTransfer<D, Weight, Index>>(
+            transfer_ = std::make_unique<population_transfer<D, Weight, Index>>(
                 fine_generator_.domain().graph(), fine_generator_.state_space(), species_totals);
             num::array<double> coarse_diffusivities(
                 fine_generator_.domain().diffusivities().begin(),
                 fine_generator_.domain().diffusivities().end());
             for (double &diffusivity : coarse_diffusivities)
                 diffusivity *= 2.0;
-            VoxelDomain<graph_type> coarse_domain(
+            voxel_domain<graph_type> coarse_domain(
                 transfer_->coarse_graph(),
-                std::vector<double>(coarse_diffusivities.begin(), coarse_diffusivities.end()));
+                num::array<double>(coarse_diffusivities.begin(), coarse_diffusivities.end()));
             coarse_level_ =
-                std::unique_ptr<TwoLevelPopulationMultigrid>(new TwoLevelPopulationMultigrid(
-                    PrivateTag{}, std::move(coarse_domain), std::move(species_totals), shift_,
+                std::unique_ptr<two_level_population_multigrid>(new two_level_population_multigrid(
+                    private_tag{}, std::move(coarse_domain), std::move(species_totals), shift_,
                     pre_sweeps_ + sweep_growth, post_sweeps_ + sweep_growth, jacobi_weight_,
                     coarse_max_states, max_levels, coarse_cycles_, sweep_growth, smoother_,
                     level + 1));
@@ -344,7 +342,7 @@ class TwoLevelPopulationMultigrid {
             coarse_system_image_ = num::vec(transfer_->coarse_size(), 0.0);
             coarse_residual_ = num::vec(transfer_->coarse_size(), 0.0);
             coarse_correction_ = num::vec(transfer_->coarse_size(), 0.0);
-            if (smoother_ == PopulationSmoother::aggregate_block)
+            if (smoother_ == population_smoother::aggregate_block)
                 build_aggregate_blocks();
         } else {
             exact_inverse_ = build_exact_inverse();
@@ -413,14 +411,14 @@ class TwoLevelPopulationMultigrid {
         return num::lu_inv(factor);
     }
 
-    struct Block {
+    struct block {
         num::array<num::idx> states;
         num::lu_result factor;
         mutable num::vec rhs;
         mutable num::vec correction;
     };
 
-    using BlockPartition = std::vector<Block>;
+    using block_partition = num::array<block>;
 
     void build_aggregate_blocks() {
         const auto &space = fine_generator_.state_space();
@@ -430,9 +428,9 @@ class TwoLevelPopulationMultigrid {
         block_partitions_.resize(aggregate_count);
 
         for (std::size_t aggregate = 0; aggregate < aggregate_count; ++aggregate) {
-            std::unordered_map<Configuration, num::array<num::idx>, ConfigurationHash> groups;
+            num::unordered_map<configuration, num::array<num::idx>, configuration_hash> groups;
             for (num::idx state = 0; state < rows(); ++state) {
-                Configuration signature = space[state];
+                configuration signature = space[state];
                 for (std::size_t voxel = 0; voxel < layout.voxel_count(); ++voxel) {
                     if (static_cast<std::size_t>(voxel_parent[voxel]) != aggregate)
                         continue;
@@ -444,7 +442,7 @@ class TwoLevelPopulationMultigrid {
 
             auto &partition = block_partitions_[aggregate];
             partition.reserve(groups.size());
-            num::array<num::idx> local_index(rows(), DiffusionStateSpace::npos);
+            num::array<num::idx> local_index(rows(), diffusion_state_space::npos);
             for (auto &[signature, states] : groups) {
                 (void)signature;
                 if (states.size() == 1)
@@ -461,7 +459,7 @@ class TwoLevelPopulationMultigrid {
                          entry < fine_generator_.source_offsets()[source + 1]; ++entry) {
                         const auto &transition = fine_generator_.transitions()[entry];
                         const num::idx local_destination = local_index[transition.destination];
-                        if (local_destination != DiffusionStateSpace::npos)
+                        if (local_destination != diffusion_state_space::npos)
                             matrix(local_destination, local_source) -= transition.rate;
                     }
                 }
@@ -472,7 +470,7 @@ class TwoLevelPopulationMultigrid {
                 partition.push_back({std::move(states), std::move(factor),
                                      num::vec(block_size, 0.0), num::vec(block_size, 0.0)});
                 for (num::idx state : partition.back().states)
-                    local_index[state] = DiffusionStateSpace::npos;
+                    local_index[state] = diffusion_state_space::npos;
             }
         }
     }
@@ -496,14 +494,14 @@ class TwoLevelPopulationMultigrid {
         for (std::size_t sweep = 0; sweep < sweeps; ++sweep) {
             for (std::size_t step = 0; step < block_partitions_.size(); ++step) {
                 const std::size_t aggregate = reverse ? block_partitions_.size() - step - 1 : step;
-                for (Block &block : block_partitions_[aggregate]) {
+                for (block &block : block_partitions_[aggregate]) {
                     for (num::idx local = 0; local < block.states.size(); ++local) {
                         const num::idx state = block.states[local];
                         block.rhs[local] = residual_[state];
                     }
                     num::lu_solve(block.factor, block.rhs, block.correction);
                 }
-                for (const Block &block : block_partitions_[aggregate]) {
+                for (const block &block : block_partitions_[aggregate]) {
                     for (num::idx local = 0; local < block.states.size(); ++local)
                         solution_[block.states[local]] += block.correction[local];
                     for (num::idx local = 0; local < block.states.size(); ++local) {
@@ -523,13 +521,13 @@ class TwoLevelPopulationMultigrid {
     }
 
     void smooth(std::size_t sweeps, bool reverse = false) const {
-        if (smoother_ == PopulationSmoother::aggregate_block && !block_partitions_.empty())
+        if (smoother_ == population_smoother::aggregate_block && !block_partitions_.empty())
             smooth_blocks(sweeps, reverse);
         else
             smooth_jacobi(sweeps);
     }
 
-    void multiply_exact_inverse(std::span<const double> x, std::span<double> y) const {
+    void multiply_exact_inverse(num::view<const double> x, num::view<double> y) const {
         std::fill(y.begin(), y.end(), 0.0);
         for (num::idx row = 0; row < rows(); ++row) {
             for (num::idx column = 0; column < rows(); ++column) {
@@ -538,15 +536,15 @@ class TwoLevelPopulationMultigrid {
         }
     }
 
-    DiffusionGenerator<graph_type> fine_generator_;
+    diffusion_generator<graph_type> fine_generator_;
     double shift_;
     std::size_t pre_sweeps_;
     std::size_t post_sweeps_;
     double jacobi_weight_;
     std::size_t coarse_cycles_;
-    PopulationSmoother smoother_;
-    std::unique_ptr<PopulationTransfer<D, Weight, Index>> transfer_;
-    std::unique_ptr<TwoLevelPopulationMultigrid> coarse_level_;
+    population_smoother smoother_;
+    std::unique_ptr<population_transfer<D, Weight, Index>> transfer_;
+    std::unique_ptr<two_level_population_multigrid> coarse_level_;
     num::mat exact_inverse_;
     mutable num::vec rhs_;
     mutable num::vec solution_;
@@ -559,30 +557,30 @@ class TwoLevelPopulationMultigrid {
     mutable num::vec coarse_system_image_;
     mutable num::vec coarse_residual_;
     mutable num::vec coarse_correction_;
-    mutable std::vector<BlockPartition> block_partitions_;
+    mutable num::array<block_partition> block_partitions_;
 };
 
 /// Preferred name for the recursive hierarchy. The older two-level name remains
 /// available because it was part of the first experimental API.
 template <std::size_t D, typename Weight = double, std::integral Index = num::idx>
-using PopulationMultigrid = TwoLevelPopulationMultigrid<D, Weight, Index>;
+using population_multigrid = two_level_population_multigrid<D, Weight, Index>;
 
 /// Block preconditioner applying one population multigrid V-cycle independently
 /// to every contiguous sector of a reaction state space. Reaction couplings are
 /// intentionally left to the outer nonsymmetric Krylov iteration.
 template <std::size_t D, typename Weight = double, std::integral Index = num::idx>
-class SectorDiffusionMultigrid {
+class sector_diffusion_multigrid {
   public:
     using graph_type = num::structured_grid_graph<D, Weight, Index>;
     using domain_type = num::vec;
     using codomain_type = num::vec;
     using math_laws = num::math::type_list<num::law::linear_map>;
 
-    SectorDiffusionMultigrid(const VoxelDomain<graph_type> &domain,
-                             const ReactionStateSpace &state_space, double shift,
-                             std::size_t pre_sweeps = 2, std::size_t post_sweeps = 2,
-                             double jacobi_weight = 2.0 / 3.0,
-                             PopulationSmoother smoother = PopulationSmoother::weighted_jacobi)
+    sector_diffusion_multigrid(const voxel_domain<graph_type> &domain,
+                               const reaction_state_space &state_space, double shift,
+                               std::size_t pre_sweeps = 2, std::size_t post_sweeps = 2,
+                               double jacobi_weight = 2.0 / 3.0,
+                               population_smoother smoother = population_smoother::weighted_jacobi)
         : sector_offsets_(state_space.sector_offsets()) {
         levels_.reserve(state_space.n_sectors());
         for (const auto &totals : state_space.sector_totals()) {
@@ -608,39 +606,39 @@ class SectorDiffusionMultigrid {
         for (std::size_t sector = 0; sector < levels_.size(); ++sector) {
             const num::idx offset = sector_offsets_[sector];
             const num::idx size = sector_offsets_[sector + 1] - offset;
-            levels_[sector].apply_block(std::span<const double>(x.data() + offset, size),
-                                        std::span<double>(y.data() + offset, size));
+            levels_[sector].apply_block(num::view<const double>(x.data() + offset, size),
+                                        num::view<double>(y.data() + offset, size));
         }
     }
 
   private:
     num::array<num::idx> sector_offsets_;
-    num::array<TwoLevelPopulationMultigrid<D, Weight, Index>> levels_;
+    num::array<two_level_population_multigrid<D, Weight, Index>> levels_;
 };
 
 template <std::size_t D, typename Weight, std::integral Index>
-TwoLevelPopulationMultigrid(VoxelDomain<num::structured_grid_graph<D, Weight, Index>>,
-                            num::array<int>, double, std::size_t, std::size_t, double)
-    -> TwoLevelPopulationMultigrid<D, Weight, Index>;
+two_level_population_multigrid(voxel_domain<num::structured_grid_graph<D, Weight, Index>>,
+                               num::array<int>, double, std::size_t, std::size_t, double)
+    -> two_level_population_multigrid<D, Weight, Index>;
 
 template <std::size_t D, typename Weight, std::integral Index>
-TwoLevelPopulationMultigrid(VoxelDomain<num::structured_grid_graph<D, Weight, Index>>,
-                            num::array<int>, double)
-    -> TwoLevelPopulationMultigrid<D, Weight, Index>;
+two_level_population_multigrid(voxel_domain<num::structured_grid_graph<D, Weight, Index>>,
+                               num::array<int>, double)
+    -> two_level_population_multigrid<D, Weight, Index>;
 
 template <std::size_t D, typename Weight, std::integral Index>
-SectorDiffusionMultigrid(const VoxelDomain<num::structured_grid_graph<D, Weight, Index>> &,
-                         const ReactionStateSpace &, double, std::size_t, std::size_t, double)
-    -> SectorDiffusionMultigrid<D, Weight, Index>;
+sector_diffusion_multigrid(const voxel_domain<num::structured_grid_graph<D, Weight, Index>> &,
+                           const reaction_state_space &, double, std::size_t, std::size_t, double)
+    -> sector_diffusion_multigrid<D, Weight, Index>;
 
 template <std::size_t D, typename Weight, std::integral Index>
-SectorDiffusionMultigrid(const VoxelDomain<num::structured_grid_graph<D, Weight, Index>> &,
-                         const ReactionStateSpace &, double, std::size_t, std::size_t, double,
-                         PopulationSmoother) -> SectorDiffusionMultigrid<D, Weight, Index>;
+sector_diffusion_multigrid(const voxel_domain<num::structured_grid_graph<D, Weight, Index>> &,
+                           const reaction_state_space &, double, std::size_t, std::size_t, double,
+                           population_smoother) -> sector_diffusion_multigrid<D, Weight, Index>;
 
 template <std::size_t D, typename Weight, std::integral Index>
-SectorDiffusionMultigrid(const VoxelDomain<num::structured_grid_graph<D, Weight, Index>> &,
-                         const ReactionStateSpace &, double)
-    -> SectorDiffusionMultigrid<D, Weight, Index>;
+sector_diffusion_multigrid(const voxel_domain<num::structured_grid_graph<D, Weight, Index>> &,
+                           const reaction_state_space &, double)
+    -> sector_diffusion_multigrid<D, Weight, Index>;
 
 } // namespace rdme

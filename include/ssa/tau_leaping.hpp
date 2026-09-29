@@ -7,7 +7,7 @@
 
 namespace ssa {
 
-struct LeapOptions {
+struct leap_options {
     double fixed_step = 0.0; // Positive values disable adaptive step selection.
     double epsilon = 0.03;   // Expected total events per adaptive step.
     double min_step = 1e-6;
@@ -15,18 +15,18 @@ struct LeapOptions {
 
 /// Poisson tau-leaping templated over PRNG.
 template <typename rng_state = std::mt19937_64>
-inline markovkit::Trajectory
-tau_leaping(const markovkit::ReactionSystem &model, const std::vector<double> &rates,
-            const markovkit::State &initial, double t0, double tf, LeapOptions options,
-            rng_state &rng) {
+inline markovkit::trajectory tau_leaping(const markovkit::reaction_system &model,
+                                         const num::array<double> &rates,
+                                         const markovkit::state &initial, double t0, double tf,
+                                         leap_options options, rng_state &rng) {
     model.validate();
-    markovkit::Trajectory path;
+    markovkit::trajectory path;
     path.times.push_back(t0);
     path.states.push_back(initial);
 
-    markovkit::State current = initial;
+    markovkit::state current = initial;
     double t = t0;
-    std::vector<double> prop(model.size(), 0.0);
+    num::vec prop(model.size(), 0.0);
 
     // Recompute propensities at the start of every leap.
     while (t < tf) {
@@ -65,10 +65,10 @@ tau_leaping(const markovkit::ReactionSystem &model, const std::vector<double> &r
 }
 
 /// Seed-based overload for backward compatibility.
-inline markovkit::Trajectory
-tau_leaping(const markovkit::ReactionSystem &model, const std::vector<double> &rates,
-            const markovkit::State &initial, double t0, double tf, LeapOptions options = {},
-            int seed = 42) {
+inline markovkit::trajectory tau_leaping(const markovkit::reaction_system &model,
+                                         const num::array<double> &rates,
+                                         const markovkit::state &initial, double t0, double tf,
+                                         leap_options options = {}, int seed = 42) {
     std::mt19937 rng(static_cast<unsigned int>(seed));
     return tau_leaping<std::mt19937>(model, rates, initial, t0, tf, options, rng);
 }

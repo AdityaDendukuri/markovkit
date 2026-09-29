@@ -6,12 +6,11 @@
 namespace cme {
 namespace {
 
-markovkit::State graph_state(num::idx state) {
-    return markovkit::State{static_cast<int>(state)};
+markovkit::state graph_state(num::idx state) {
+    return markovkit::state{static_cast<int>(state)};
 }
 
-void validate_laplacian(const num::spmat &laplacian,
-                        const std::vector<double> &stationary_sqrt) {
+void validate_laplacian(const num::spmat &laplacian, num::view<const double> stationary_sqrt) {
     if (laplacian.n_rows() != laplacian.n_cols()) {
         throw std::invalid_argument("Laplacian must be square");
     }
@@ -24,10 +23,10 @@ void validate_laplacian(const num::spmat &laplacian,
 
 } // namespace
 
-ReversibleGenerator reversible_generator(RestrictedGenerator restricted,
-                                         std::span<const double> stationary_sqrt) {
+reversible_generator_result reversible_generator(restricted_generator restricted,
+                                                 num::view<const double> stationary_sqrt) {
     // Similarity-transform -Q into a symmetric operator.
-    std::vector<double> weights(stationary_sqrt.begin(), stationary_sqrt.end());
+    num::vec weights(stationary_sqrt);
     auto symmetric = num::diagonal_similarity(num::scaled(restricted.generator, -1.0), weights);
     if (num::linear::relative_symmetry_error(symmetric) > 1e-10) {
         throw std::invalid_argument("stationary weights do not symmetrize the generator");
@@ -35,21 +34,21 @@ ReversibleGenerator reversible_generator(RestrictedGenerator restricted,
     return {std::move(restricted), std::move(weights), std::move(symmetric)};
 }
 
-ReversibleLaplacian::ReversibleLaplacian(const num::spmat &laplacian,
-                                         const std::vector<double> &stationary_sqrt)
-    : laplacian_(&laplacian), stationary_sqrt_(&stationary_sqrt) {
+reversible_laplacian::reversible_laplacian(const num::spmat &laplacian,
+                                           num::view<const double> stationary_sqrt)
+    : laplacian_(&laplacian), stationary_sqrt_(stationary_sqrt) {
     validate_laplacian(laplacian, stationary_sqrt);
 }
 
-RestrictedGenerator restrict_laplacian(const num::spmat &laplacian,
-                                       const std::vector<double> &stationary_sqrt,
-                                       const std::vector<num::idx> &states) {
+restricted_generator restrict_laplacian(const num::spmat &laplacian,
+                                        num::view<const double> stationary_sqrt,
+                                        num::view<const num::idx> states) {
     validate_laplacian(laplacian, stationary_sqrt);
     if (states.empty()) {
         throw std::invalid_argument("a Laplacian restriction requires states");
     }
 
-    RestrictedGenerator restricted;
+    restricted_generator restricted;
     // Map selected global states to compact local indices.
     restricted.states.reserve(states.size());
     for (num::idx state : states) {
@@ -64,9 +63,9 @@ RestrictedGenerator restrict_laplacian(const num::spmat &laplacian,
         restricted.states.push_back(id);
     }
 
-    std::vector<num::idx> rows;
-    std::vector<num::idx> columns;
-    std::vector<double> values;
+    num::array<num::idx> rows;
+    num::array<num::idx> columns;
+    num::array<num::real> values;
     // Convert retained Laplacian edges back to generator rates.
     for (num::idx local_column = 0; local_column < states.size(); ++local_column) {
         const num::idx global_column = states[local_column];

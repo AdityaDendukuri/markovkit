@@ -13,9 +13,9 @@
 
 namespace rdme {
 
-class GeneratorWorkspace {
+class generator_workspace {
   public:
-    explicit GeneratorWorkspace(num::idx size) : output_(size, 0.0) {}
+    explicit generator_workspace(num::idx size) : output_(size, 0.0) {}
 
     [[nodiscard]] num::vec &output() noexcept { return output_; }
     [[nodiscard]] const num::vec &output() const noexcept { return output_; }
@@ -24,19 +24,19 @@ class GeneratorWorkspace {
     num::vec output_;
 };
 
-template <VoxelGraph Graph>
-class DiffusionGenerator {
+template <voxel_graph Graph>
+class diffusion_generator {
   public:
     using domain_type = num::vec;
     using codomain_type = num::vec;
     using math_laws = num::math::type_list<num::law::linear_map>;
 
-    struct Transition {
+    struct transition {
         num::idx destination{};
         double rate{};
     };
 
-    DiffusionGenerator(VoxelDomain<Graph> domain, num::array<int> species_totals)
+    diffusion_generator(voxel_domain<Graph> domain, num::array<int> species_totals)
         : domain_(std::move(domain)),
           state_space_(static_cast<std::size_t>(domain_.n_voxels()), std::move(species_totals)),
           source_offsets_(state_space_.size() + 1, 0), exit_rates_(state_space_.size(), 0.0) {
@@ -45,12 +45,12 @@ class DiffusionGenerator {
 
     [[nodiscard]] num::idx rows() const noexcept { return state_space_.size(); }
     [[nodiscard]] num::idx cols() const noexcept { return state_space_.size(); }
-    [[nodiscard]] const VoxelDomain<Graph> &domain() const noexcept { return domain_; }
-    [[nodiscard]] const DiffusionStateSpace &state_space() const noexcept { return state_space_; }
+    [[nodiscard]] const voxel_domain<Graph> &domain() const noexcept { return domain_; }
+    [[nodiscard]] const diffusion_state_space &state_space() const noexcept { return state_space_; }
     [[nodiscard]] const num::array<num::idx> &source_offsets() const noexcept {
         return source_offsets_;
     }
-    [[nodiscard]] const num::array<Transition> &transitions() const noexcept {
+    [[nodiscard]] const num::array<transition> &transitions() const noexcept {
         return transitions_;
     }
     [[nodiscard]] const num::array<double> &exit_rates() const noexcept { return exit_rates_; }
@@ -72,7 +72,7 @@ class DiffusionGenerator {
         }
     }
 
-    [[nodiscard]] const num::vec &apply(const num::vec &x, GeneratorWorkspace &workspace) const {
+    [[nodiscard]] const num::vec &apply(const num::vec &x, generator_workspace &workspace) const {
         apply(x, workspace.output());
         return workspace.output();
     }
@@ -103,7 +103,7 @@ class DiffusionGenerator {
     void build_cache() {
         const auto &layout = state_space_.layout();
         for (num::idx source_state = 0; source_state < state_space_.size(); ++source_state) {
-            const Configuration &state = state_space_[source_state];
+            const configuration &state = state_space_[source_state];
             for (typename Graph::index_type source_voxel = 0; source_voxel < domain_.n_voxels();
                  ++source_voxel) {
                 for (const auto &edge : domain_.graph().neighbors(source_voxel)) {
@@ -115,12 +115,12 @@ class DiffusionGenerator {
                         if (molecules == 0)
                             continue;
 
-                        Configuration destination = state;
+                        configuration destination = state;
                         --destination[source_coordinate];
                         ++destination[layout.index(static_cast<std::size_t>(destination_voxel),
                                                    species)];
                         const num::idx destination_state = state_space_.find(destination);
-                        if (destination_state == DiffusionStateSpace::npos) {
+                        if (destination_state == diffusion_state_space::npos) {
                             throw std::logic_error(
                                 "diffusion transition left its conserved RDME sector");
                         }
@@ -136,14 +136,14 @@ class DiffusionGenerator {
         }
     }
 
-    VoxelDomain<Graph> domain_;
-    DiffusionStateSpace state_space_;
+    voxel_domain<Graph> domain_;
+    diffusion_state_space state_space_;
     num::array<num::idx> source_offsets_;
-    num::array<Transition> transitions_;
+    num::array<transition> transitions_;
     num::array<double> exit_rates_;
 };
 
 template <class Graph>
-DiffusionGenerator(VoxelDomain<Graph>, num::array<int>) -> DiffusionGenerator<Graph>;
+diffusion_generator(voxel_domain<Graph>, num::array<int>) -> diffusion_generator<Graph>;
 
 } // namespace rdme

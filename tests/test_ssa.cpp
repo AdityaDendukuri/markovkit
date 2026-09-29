@@ -4,16 +4,14 @@
 #include <iostream>
 
 void test_gillespie_birth_death() {
-    markovkit::ReactionSystem model;
+    markovkit::reaction_system model;
     model.changes = {{1}, {-1}};
     model.propensities = {
-        [](const markovkit::State &, const std::vector<double> &r, double) { return r[0]; },
-        [](const markovkit::State &x, const std::vector<double> &r, double) {
-            return r[1] * x[0];
-        }};
+        [](const markovkit::state &, const num::array<double> &r, double) { return r[0]; },
+        [](const markovkit::state &x, const num::array<double> &r, double) { return r[1] * x[0]; }};
 
-    std::vector<double> rates = {5.0, 0.1};
-    markovkit::State initial{0};
+    num::array<double> rates = {5.0, 0.1};
+    markovkit::state initial{0};
 
     const int paths = 2000;
     double mean = 0.0;
@@ -30,9 +28,9 @@ void test_gillespie_birth_death() {
 }
 
 void test_gillespie_step_limit() {
-    markovkit::ReactionSystem model{
+    markovkit::reaction_system model{
         .changes = {{1}},
-        .propensities = {[](const markovkit::State &, const auto &, double) { return 1.0; }}};
+        .propensities = {[](const markovkit::state &, const auto &, double) { return 1.0; }}};
     const auto path = ssa::gillespie(model, {}, {0}, 0.0, 100.0, 42, 5);
     assert(path.reactions.size() == 5);
     assert(path.states.size() == 6);
@@ -40,29 +38,30 @@ void test_gillespie_step_limit() {
 }
 
 void test_reaction_and_trajectory_helpers() {
-    markovkit::ReactionSystem model{
+    markovkit::reaction_system model{
         .changes = {{1}, {-1}},
         .propensities = {
-            [](const markovkit::State &, const auto &, double) { return 2.0; },
-            [](const markovkit::State &, const auto &, double) { return -1.0; },
+            [](const markovkit::state &, const auto &, double) { return 2.0; },
+            [](const markovkit::state &, const auto &, double) { return -1.0; },
         }};
-    std::vector<double> propensities(2, 0.0);
+    num::array<double> propensities(2, 0.0);
     assert(model.evaluate_propensities({3}, {}, 0.0, propensities) == 2.0);
     assert(propensities[0] == 2.0);
     assert(propensities[1] == 0.0);
     assert(model.total_propensity({3}, {}, 0.0) == 2.0);
 
-    const markovkit::Trajectory trajectory{{0.0, 1.0, 3.0}, {{2}, {4}, {8}}, {0, 0}};
-    assert(markovkit::trajectory_component(trajectory, 0) == std::vector<double>({2.0, 4.0, 8.0}));
-    const std::vector<double> observations{0.5, 1.0, 2.0, 4.0};
+    const markovkit::trajectory trajectory{{0.0, 1.0, 3.0}, {{2}, {4}, {8}}, {0, 0}};
+    const num::vec counts = markovkit::trajectory_component(trajectory, 0);
+    assert(counts.size() == 3 && counts[0] == 2.0 && counts[1] == 4.0 && counts[2] == 8.0);
+    const num::array<double> observations{0.5, 1.0, 2.0, 4.0};
     assert(markovkit::trajectory_indices_at(trajectory, observations) ==
-           std::vector<std::size_t>({0, 1, 1, 2}));
+           num::array<std::size_t>({0, 1, 1, 2}));
 }
 
 void test_templated_rng() {
-    markovkit::ReactionSystem model{
+    markovkit::reaction_system model{
         .changes = {{1}},
-        .propensities = {[](const markovkit::State &, const auto &, double) { return 1.0; }}};
+        .propensities = {[](const markovkit::state &, const auto &, double) { return 1.0; }}};
     std::mt19937_64 custom_rng(12345);
     const auto path = ssa::gillespie(model, {}, {0}, 0.0, 100.0, custom_rng, 5);
     assert(path.reactions.size() == 5);

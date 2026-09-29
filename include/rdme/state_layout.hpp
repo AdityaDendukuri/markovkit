@@ -9,9 +9,9 @@
 namespace rdme {
 
 /// Voxel-major layout: `(voxel, species)` maps to `voxel * species_count + species`.
-class StateLayout {
+class state_layout {
   public:
-    StateLayout(std::size_t voxel_count, std::size_t species_count)
+    state_layout(std::size_t voxel_count, std::size_t species_count)
         : voxel_count_(voxel_count), species_count_(species_count) {
         if (voxel_count == 0 || species_count == 0) {
             throw std::invalid_argument("RDME state layout dimensions must be positive");

@@ -1,18 +1,16 @@
+#include "core/types.hpp"
 #include "markovkit.hpp"
-#include <vector>
 
 int main() {
     // This model has constant birth and count-dependent death.
-    markovkit::ReactionSystem model;
+    markovkit::reaction_system model;
     model.changes = {{1}, {-1}};
     model.propensities = {
-        [](const markovkit::State &, const std::vector<double> &r, double) { return r[0]; },
-        [](const markovkit::State &x, const std::vector<double> &r, double) {
-            return r[1] * x[0];
-        }};
+        [](const markovkit::state &, const num::array<double> &r, double) { return r[0]; },
+        [](const markovkit::state &x, const num::array<double> &r, double) { return r[1] * x[0]; }};
 
-    const std::vector<double> rates = {5.0, 0.1};
-    const markovkit::State initial{0};
+    const num::array<double> rates = {5.0, 0.1};
+    const markovkit::state initial{0};
 
     // Compare exact SSA with fixed-tolerance tau leaping.
     const auto exact = ssa::gillespie(model, rates, initial, 0.0, 20.0, 42);
