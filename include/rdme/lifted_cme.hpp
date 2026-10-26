@@ -15,8 +15,8 @@ namespace rdme {
 /// Lift identical local reactions and graph diffusion jumps into one CME system.
 ///
 /// This explicit event lift is intended as a correctness oracle and as a bridge
-/// to the existing FSP solvers. Its event count is V*R + S*sum(degree). Large
-/// RDME calculations should use the forthcoming matrix-free operator instead.
+/// to the existing FSP solvers. Its event count is V*R + S*sum(degree). For large
+/// RDME calculations use diffusion_generator or restricted_generator.
 template <voxel_graph Graph>
 [[nodiscard]] cme::reaction_system lift_to_cme(const voxel_domain<Graph> &domain,
                                                const cme::reaction_system &local_reactions) {
@@ -24,10 +24,6 @@ template <voxel_graph Graph>
     const std::size_t voxel_count = static_cast<std::size_t>(domain.n_voxels());
     const std::size_t species_count = domain.n_species();
     const state_layout layout(voxel_count, species_count);
-    if (layout.size() > markovkit::state::k_max_dim) {
-        throw std::invalid_argument(
-            "exact RDME-to-CME lift exceeds MarkovKit's fixed-capacity reference state");
-    }
 
     for (const auto &change : local_reactions.changes) {
         if (change.size() != species_count) {

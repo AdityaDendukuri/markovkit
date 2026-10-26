@@ -1,6 +1,6 @@
 #include "core/types.hpp"
 #include "linear/solvers/ilu.hpp"
-#include "linear/solvers/math_gmres.hpp"
+#include "linear/solvers/gmres.hpp"
 #include "linear/solvers/preconditioner.hpp"
 #include "rdme/rdme.hpp"
 #include "structures/graph/structured_grid.hpp"
@@ -32,7 +32,7 @@ double milliseconds(clock::time_point begin, clock::time_point end) {
     return std::chrono::duration<double, std::milli>(end - begin).count();
 }
 
-double relative_difference(const num::vec &solution, const num::vec &reference) {
+double relative_difference(const num::vec<double> &solution, const num::vec<double> &reference) {
     double difference_squared = 0.0;
     double reference_squared = 0.0;
     for (num::idx state = 0; state < solution.size(); ++state) {
@@ -84,7 +84,7 @@ void run_case(const benchmark_case &problem) {
     const num::idx voxels = generator.model().domain().n_voxels();
 
     rdme::shifted_generator system(generator, problem.shift);
-    num::vec rhs(generator.rows(), 0.0);
+    num::vec<double> rhs(generator.rows(), 0.0);
     for (num::idx state = 0; state < rhs.size(); ++state) {
         rhs[state] = 1.0 + 0.1 * std::cos(static_cast<double>(state));
     }
@@ -92,20 +92,20 @@ void run_case(const benchmark_case &problem) {
                                      .max_iterations = 500,
                                      .restart = std::min<num::idx>(50, generator.rows())};
 
-    num::vec plain_solution(generator.rows(), 0.0);
+    num::vec<double> plain_solution(generator.rows(), 0.0);
     const auto plain_begin = clock::now();
     const auto plain = num::gmres(system, rhs, plain_solution, options);
     const auto plain_end = clock::now();
     const double plain_solve_ms = milliseconds(plain_begin, plain_end);
 
     const auto jacobi_begin = clock::now();
-    num::vec inverse_diagonal(generator.rows(), 0.0);
+    num::vec<double> inverse_diagonal(generator.rows(), 0.0);
     for (num::idx state = 0; state < generator.rows(); ++state) {
         inverse_diagonal[state] = 1.0 / (problem.shift + generator.exit_rates()[state]);
     }
     num::jacobi_preconditioner jacobi(std::move(inverse_diagonal));
     const auto jacobi_end = clock::now();
-    num::vec jacobi_solution(generator.rows(), 0.0);
+    num::vec<double> jacobi_solution(generator.rows(), 0.0);
     const auto jacobi_solve_begin = clock::now();
     const auto jacobi_result = num::gmres(system, jacobi, rhs, jacobi_solution, options);
     const auto jacobi_solve_end = clock::now();
@@ -134,7 +134,7 @@ void run_case(const benchmark_case &problem) {
         generator.rows(), generator.cols(), matrix_rows, matrix_columns, matrix_values);
     const num::ilu0_preconditioner ilu(sparse_system);
     const auto ilu_end = clock::now();
-    num::vec ilu_solution(generator.rows(), 0.0);
+    num::vec<double> ilu_solution(generator.rows(), 0.0);
     const auto ilu_solve_begin = clock::now();
     const auto ilu_result = num::gmres(system, ilu, rhs, ilu_solution, options);
     const auto ilu_solve_end = clock::now();
@@ -145,14 +145,14 @@ void run_case(const benchmark_case &problem) {
     rdme::sector_diffusion_multigrid multigrid(generator.model().domain(), generator.state_space(),
                                                problem.shift);
     const auto multigrid_end = clock::now();
-    num::vec multigrid_solution(generator.rows(), 0.0);
+    num::vec<double> multigrid_solution(generator.rows(), 0.0);
     const auto multigrid_solve_begin = clock::now();
     const auto multigrid_result = num::gmres(system, multigrid, rhs, multigrid_solution, options);
     const auto multigrid_solve_end = clock::now();
     const double multigrid_setup_ms = milliseconds(multigrid_begin, multigrid_end);
     const double multigrid_solve_ms = milliseconds(multigrid_solve_begin, multigrid_solve_end);
 
-    const num::vec *reference = nullptr;
+    const num::vec<double> *reference = nullptr;
     if (plain.converged)
         reference = &plain_solution;
     else if (multigrid_result.converged)
@@ -161,7 +161,7 @@ void run_case(const benchmark_case &problem) {
         reference = &ilu_solution;
     else if (jacobi_result.converged)
         reference = &jacobi_solution;
-    const auto difference = [&](const num::vec &solution, bool converged) {
+    const auto difference = [&](const num::vec<double> &solution, bool converged) {
         return reference && converged ? relative_difference(solution, *reference)
                                       : std::numeric_limits<double>::quiet_NaN();
     };

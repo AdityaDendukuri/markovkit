@@ -1,8 +1,10 @@
 #pragma once
+#include "stochastic/categorical.hpp"
 
 #include "core/types.hpp"
 #include "markovkit/reaction_system.hpp"
 #include "markovkit/trajectory.hpp"
+#include "stochastic/rng.hpp"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
@@ -12,7 +14,7 @@
 namespace ssa {
 
 /// Gillespie's exact direct stochastic simulation method templated over PRNG.
-template <typename rng_state = std::mt19937_64>
+template <typename rng_state = num::rng>
 inline markovkit::trajectory
 gillespie(const markovkit::reaction_system &model, const num::array<double> &rates,
           const markovkit::state &initial, double t0, double tf, rng_state &rng,
@@ -26,7 +28,7 @@ gillespie(const markovkit::reaction_system &model, const num::array<double> &rat
 
     markovkit::state current = initial;
     double t = t0;
-    num::vec prop(model.size(), 0.0);
+    num::vec<double> prop(model.size(), 0.0);
 
     // Recompute propensities after every reaction event.
     while (t < tf && path.reactions.size() < maximum_steps) {
@@ -45,7 +47,8 @@ gillespie(const markovkit::reaction_system &model, const num::array<double> &rat
         const std::size_t fired = num::sample_categorical(prop, rng);
 
         // Apply the selected stoichiometric change.
-        current = current + model.changes[fired];
+        for (num::idx species = 0; species < current.size(); ++species)
+            current[species] += model.changes[fired][species];
         path.times.push_back(t);
         path.states.push_back(current);
         path.reactions.push_back(fired);
@@ -64,8 +67,8 @@ inline markovkit::trajectory
 gillespie(const markovkit::reaction_system &model, const num::array<double> &rates,
           const markovkit::state &initial, double t0, double tf, int seed = 42,
           std::size_t maximum_steps = std::numeric_limits<std::size_t>::max()) {
-    std::mt19937 rng(static_cast<unsigned int>(seed));
-    return gillespie<std::mt19937>(model, rates, initial, t0, tf, rng, maximum_steps);
+    num::rng rng(static_cast<unsigned int>(seed));
+    return gillespie(model, rates, initial, t0, tf, rng, maximum_steps);
 }
 
 } // namespace ssa

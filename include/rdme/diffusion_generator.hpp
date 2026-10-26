@@ -13,23 +13,11 @@
 
 namespace rdme {
 
-class generator_workspace {
-  public:
-    explicit generator_workspace(num::idx size) : output_(size, 0.0) {}
-
-    [[nodiscard]] num::vec &output() noexcept { return output_; }
-    [[nodiscard]] const num::vec &output() const noexcept { return output_; }
-
-  private:
-    num::vec output_;
-};
-
 template <voxel_graph Graph>
 class diffusion_generator {
   public:
-    using domain_type = num::vec;
-    using codomain_type = num::vec;
-    using math_laws = num::math::type_list<num::law::linear_map>;
+    using domain_type = num::vec<double>;
+    using codomain_type = num::vec<double>;
 
     struct transition {
         num::idx destination{};
@@ -56,7 +44,7 @@ class diffusion_generator {
     [[nodiscard]] const num::array<double> &exit_rates() const noexcept { return exit_rates_; }
 
     /// Apply the column-oriented generator y <- Q x without allocating.
-    void apply(const num::vec &x, num::vec &y) const {
+    void apply(const num::vec<double> &x, num::vec<double> &y) const {
         if (x.size() != rows() || y.size() != rows()) {
             throw std::invalid_argument("RDME diffusion generator vector size mismatch");
         }
@@ -70,11 +58,6 @@ class diffusion_generator {
                 y[transition.destination] += transition.rate * probability;
             }
         }
-    }
-
-    [[nodiscard]] const num::vec &apply(const num::vec &x, generator_workspace &workspace) const {
-        apply(x, workspace.output());
-        return workspace.output();
     }
 
     [[nodiscard]] num::spmat to_sparse() const {

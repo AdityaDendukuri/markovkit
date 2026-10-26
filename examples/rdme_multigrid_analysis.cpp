@@ -49,7 +49,7 @@ double weighted_norm(num::view<const double> x, num::view<const double> stationa
     return std::sqrt(squared);
 }
 
-void normalize(num::vec &x, num::view<const double> stationary) {
+void normalize(num::vec<double> &x, num::view<const double> stationary) {
     const double norm = weighted_norm(x, stationary);
     if (!(norm > 0.0) || !std::isfinite(norm))
         throw std::runtime_error("RDME multigrid analysis encountered a zero error vector");
@@ -57,9 +57,9 @@ void normalize(num::vec &x, num::view<const double> stationary) {
         value /= norm;
 }
 
-num::vec stationary_distribution(const rdme::diffusion_state_space &space) {
+num::vec<double> stationary_distribution(const rdme::diffusion_state_space &space) {
     const auto &layout = space.layout();
-    num::vec stationary(space.size(), 0.0);
+    num::vec<double> stationary(space.size(), 0.0);
     for (num::idx state = 0; state < space.size(); ++state) {
         double log_probability = 0.0;
         for (std::size_t species = 0; species < layout.species_count(); ++species) {
@@ -83,8 +83,8 @@ num::vec stationary_distribution(const rdme::diffusion_state_space &space) {
 }
 
 template <typename Transfer>
-void remove_coarse_component(const Transfer &transfer, num::vec &fine, num::vec &coarse,
-                             num::vec &lifted) {
+void remove_coarse_component(const Transfer &transfer, num::vec<double> &fine, num::vec<double> &coarse,
+                             num::vec<double> &lifted) {
     transfer.restrict(fine, coarse);
     transfer.prolong(coarse, lifted);
     for (num::idx state = 0; state < fine.size(); ++state)
@@ -99,8 +99,8 @@ double estimate_asymptotic_factor(num::idx size, num::view<const double> station
     std::normal_distribution<double> normal;
     double estimate = 0.0;
     for (int probe = 0; probe < probes; ++probe) {
-        num::vec error(size, 0.0);
-        num::vec next(size, 0.0);
+        num::vec<double> error(size, 0.0);
+        num::vec<double> next(size, 0.0);
         for (num::idx state = 0; state < size; ++state)
             error[state] = std::sqrt(stationary[state]) * normal(engine);
         project(error);
@@ -160,17 +160,17 @@ void run_case(const benchmark_case &problem) {
 
     const auto &generator = multigrid.fine_generator();
     const auto &transfer = two_grid.transfer();
-    const num::vec stationary = stationary_distribution(generator.state_space());
-    num::vec system_image(generator.rows(), 0.0);
-    num::vec work(generator.rows(), 0.0);
-    num::vec coarse(transfer.coarse_size(), 0.0);
-    num::vec lifted(generator.rows(), 0.0);
-    num::vec coarse_residual(transfer.coarse_size(), 0.0);
-    num::vec coarse_correction(transfer.coarse_size(), 0.0);
-    num::vec zero(generator.rows(), 0.0);
+    const num::vec<double> stationary = stationary_distribution(generator.state_space());
+    num::vec<double> system_image(generator.rows(), 0.0);
+    num::vec<double> work(generator.rows(), 0.0);
+    num::vec<double> coarse(transfer.coarse_size(), 0.0);
+    num::vec<double> lifted(generator.rows(), 0.0);
+    num::vec<double> coarse_residual(transfer.coarse_size(), 0.0);
+    num::vec<double> coarse_correction(transfer.coarse_size(), 0.0);
+    num::vec<double> zero(generator.rows(), 0.0);
     constexpr double omega = 2.0 / 3.0;
 
-    const auto smooth = [&](const num::vec &input, num::vec &output, int sweeps) {
+    const auto smooth = [&](const num::vec<double> &input, num::vec<double> &output, int sweeps) {
         output = input;
         for (int sweep = 0; sweep < sweeps; ++sweep) {
             multigrid.apply_system(output, system_image);
@@ -181,28 +181,28 @@ void run_case(const benchmark_case &problem) {
             std::swap(output, work);
         }
     };
-    const auto high_pass = [&](num::vec &error) {
+    const auto high_pass = [&](num::vec<double> &error) {
         remove_coarse_component(transfer, error, coarse, lifted);
     };
-    const auto no_projection = [](num::vec &) {};
+    const auto no_projection = [](num::vec<double> &) {};
 
     const double smoothing_one = estimate_asymptotic_factor(
         generator.rows(), stationary,
-        [&](const num::vec &input, num::vec &output) { smooth(input, output, 1); }, high_pass,
+        [&](const num::vec<double> &input, num::vec<double> &output) { smooth(input, output, 1); }, high_pass,
         0x51a7ULL + problem.cells_per_axis * 31 + problem.population);
     const double smoothing_two = estimate_asymptotic_factor(
         generator.rows(), stationary,
-        [&](const num::vec &input, num::vec &output) { smooth(input, output, 2); }, high_pass,
+        [&](const num::vec<double> &input, num::vec<double> &output) { smooth(input, output, 2); }, high_pass,
         0x72b9ULL + problem.cells_per_axis * 31 + problem.population);
     const double block_smoothing = estimate_asymptotic_factor(
         generator.rows(), stationary,
-        [&](const num::vec &input, num::vec &output) {
+        [&](const num::vec<double> &input, num::vec<double> &output) {
             output = input;
             block_multigrid.relax(zero, output, 1);
         },
         high_pass, 0x83baULL + problem.cells_per_axis * 31 + problem.population);
 
-    const auto apply_two_grid = [&](const num::vec &input, num::vec &output) {
+    const auto apply_two_grid = [&](const num::vec<double> &input, num::vec<double> &output) {
         smooth(input, output, 2);
         two_grid.apply_system(output, system_image);
         transfer.restrict(system_image, coarse_residual);
@@ -217,7 +217,7 @@ void run_case(const benchmark_case &problem) {
         estimate_asymptotic_factor(generator.rows(), stationary, apply_two_grid, no_projection,
                                    0x93c1ULL + problem.cells_per_axis * 31 + problem.population);
 
-    const auto apply_block_two_grid = [&](const num::vec &input, num::vec &output) {
+    const auto apply_block_two_grid = [&](const num::vec<double> &input, num::vec<double> &output) {
         block_two_grid.apply_system(input, system_image);
         block_two_grid.apply(system_image, work);
         for (num::idx state = 0; state < input.size(); ++state)
@@ -227,7 +227,7 @@ void run_case(const benchmark_case &problem) {
         generator.rows(), stationary, apply_block_two_grid, no_projection,
         0xa4d2ULL + problem.cells_per_axis * 31 + problem.population);
 
-    const auto apply_vcycle = [&](const num::vec &input, num::vec &output) {
+    const auto apply_vcycle = [&](const num::vec<double> &input, num::vec<double> &output) {
         multigrid.apply_system(input, system_image);
         multigrid.apply(system_image, work);
         for (num::idx state = 0; state < input.size(); ++state)
@@ -237,7 +237,7 @@ void run_case(const benchmark_case &problem) {
         estimate_asymptotic_factor(generator.rows(), stationary, apply_vcycle, no_projection,
                                    0xb4d3ULL + problem.cells_per_axis * 31 + problem.population);
 
-    const auto apply_block_vcycle = [&](const num::vec &input, num::vec &output) {
+    const auto apply_block_vcycle = [&](const num::vec<double> &input, num::vec<double> &output) {
         block_multigrid.apply_system(input, system_image);
         block_multigrid.apply(system_image, work);
         for (num::idx state = 0; state < input.size(); ++state)
@@ -247,7 +247,7 @@ void run_case(const benchmark_case &problem) {
         estimate_asymptotic_factor(generator.rows(), stationary, apply_block_vcycle, no_projection,
                                    0xc5e6ULL + problem.cells_per_axis * 31 + problem.population);
 
-    const auto apply_block_wcycle = [&](const num::vec &input, num::vec &output) {
+    const auto apply_block_wcycle = [&](const num::vec<double> &input, num::vec<double> &output) {
         block_wcycle.apply_system(input, system_image);
         block_wcycle.apply(system_image, work);
         for (num::idx state = 0; state < input.size(); ++state)
@@ -257,7 +257,7 @@ void run_case(const benchmark_case &problem) {
         estimate_asymptotic_factor(generator.rows(), stationary, apply_block_wcycle, no_projection,
                                    0xd6f8ULL + problem.cells_per_axis * 31 + problem.population);
 
-    const auto apply_wcycle = [&](const num::vec &input, num::vec &output) {
+    const auto apply_wcycle = [&](const num::vec<double> &input, num::vec<double> &output) {
         wcycle.apply_system(input, system_image);
         wcycle.apply(system_image, work);
         for (num::idx state = 0; state < input.size(); ++state)
@@ -267,7 +267,7 @@ void run_case(const benchmark_case &problem) {
         estimate_asymptotic_factor(generator.rows(), stationary, apply_wcycle, no_projection,
                                    0xd5e7ULL + problem.cells_per_axis * 31 + problem.population);
 
-    const auto apply_variable_vcycle = [&](const num::vec &input, num::vec &output) {
+    const auto apply_variable_vcycle = [&](const num::vec<double> &input, num::vec<double> &output) {
         variable_vcycle.apply_system(input, system_image);
         variable_vcycle.apply(system_image, work);
         for (num::idx state = 0; state < input.size(); ++state)

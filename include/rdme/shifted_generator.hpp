@@ -14,9 +14,8 @@ namespace rdme {
 template <class Generator>
 class shifted_generator {
   public:
-    using domain_type = num::vec;
-    using codomain_type = num::vec;
-    using math_laws = num::math::type_list<num::law::linear_map>;
+    using domain_type = num::vec<double>;
+    using codomain_type = num::vec<double>;
 
     shifted_generator(const Generator &generator, double shift)
         : generator_(&generator), shift_(shift), generator_image_(generator.rows(), 0.0) {
@@ -30,7 +29,7 @@ class shifted_generator {
     [[nodiscard]] double shift() const noexcept { return shift_; }
     [[nodiscard]] const Generator &generator() const noexcept { return *generator_; }
 
-    void apply(const num::vec &x, num::vec &y) const {
+    void apply(const num::vec<double> &x, num::vec<double> &y) const {
         if (x.size() != rows() || y.size() != rows()) {
             throw std::invalid_argument("RDME shifted generator vector size mismatch");
         }
@@ -43,7 +42,7 @@ class shifted_generator {
   private:
     const Generator *generator_;
     double shift_;
-    mutable num::vec generator_image_;
+    mutable num::vec<double> generator_image_;
 };
 
 template <class Generator>

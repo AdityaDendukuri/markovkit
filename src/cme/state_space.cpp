@@ -1,4 +1,7 @@
 #include "cme/state_space.hpp"
+#include "container/vector.hpp"
+#include "stats/probability.hpp"
+#include "stochastic/categorical.hpp"
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -18,27 +21,22 @@ void state_space::add_state(const markovkit::state &x, double prob) {
 }
 
 void state_space::remove_states(const num::array<bool> &remove_mask) {
-    if (std::none_of(remove_mask.begin(), remove_mask.end(), [](bool b) { return b; })) {
-        return;
-    }
-    int n = static_cast<int>(states.size());
-    num::array<markovkit::state> new_states;
-    num::array<double> new_probs;
-    new_states.reserve(n);
-    new_probs.reserve(n);
-    for (int i = 0; i < n; ++i) {
-        if (!remove_mask[i]) {
-            new_states.push_back(states[i]);
-            new_probs.push_back(probs[i]);
-        }
-    }
-    states = std::move(new_states);
-    probs = std::move(new_probs);
-    // Local indices change after compaction, so rebuild the lookup once.
+    if (remove_mask.size() != states.size())
+        throw std::invalid_argument("removal mask must match the state count");
+    int kept = 0;
     index.clear();
-    for (int i = 0; i < static_cast<int>(states.size()); ++i) {
-        index[states[i]] = i;
+    for (num::idx i = 0; i < states.size(); ++i) {
+        if (remove_mask[i])
+            continue;
+        if (i != static_cast<num::idx>(kept)) {
+            states[kept] = std::move(states[i]);
+            probs[kept] = probs[i];
+        }
+        index[states[kept]] = kept;
+        ++kept;
     }
+    states.resize(kept);
+    probs.resize(kept);
 }
 
 void state_space::expand(const reaction_system &model, const boundary_condition &bc, int depth) {
@@ -48,7 +46,9 @@ void state_space::expand(const reaction_system &model, const boundary_condition 
         for (int i = 0; i < n_before; ++i) {
             markovkit::state x = states[i];
             for (const markovkit::state &nu : model.changes) {
-                markovkit::state y = x + nu;
+                markovkit::state y = x;
+                for (num::idx species = 0; species < y.size(); ++species)
+                    y[species] += nu[species];
                 if (!index.count(y) && bc(y)) {
                     add_state(y, 0.0);
                 }
@@ -58,9 +58,9 @@ void state_space::expand(const reaction_system &model, const boundary_condition 
 }
 
 void state_space::expand_ssa(const reaction_system &model, const num::array<double> &rates,
-                             double t, const boundary_condition &bc, int depth, std::mt19937 &rng) {
+                             double t, const boundary_condition &bc, int depth, num::rng &rng) {
     // Sample one likely successor per state and shell.
-    num::vec props(model.size());
+    num::vec<double> props(model.size());
     for (int d = 0; d < depth; ++d) {
         int n_before = static_cast<int>(states.size());
         for (int i = 0; i < n_before; ++i) {
@@ -72,7 +72,9 @@ void state_space::expand_ssa(const reaction_system &model, const num::array<doub
 
             const auto chosen = static_cast<int>(num::sample_categorical(props, rng));
 
-            markovkit::state y = x + model.changes[chosen];
+            markovkit::state y = x;
+            for (num::idx species = 0; species < y.size(); ++species)
+                y[species] += model.changes[chosen][species];
             if (!index.count(y) && bc(y)) {
                 add_state(y, 0.0);
             }
@@ -89,18 +91,18 @@ std::pair<double, int> state_space::compress(const reaction_system &model,
         return {0.0, 0};
     }
 
-    num::vec local_rates;
+    num::vec<double> local_rates;
     num::view<const double> exit_rates = precomputed_exit_rates;
     if (exit_rates.empty()) {
         // Compute activity locally when the generator did not provide it.
-        local_rates = num::vec(static_cast<num::idx>(n), 0.0);
+        local_rates = num::vec<double>(static_cast<num::idx>(n), 0.0);
         for (int i = 0; i < n; ++i) {
             local_rates[i] = model.total_propensity(states[i], rates, t);
         }
         exit_rates = local_rates;
     }
 
-    num::vec flux(static_cast<num::idx>(n), 0.0);
+    num::vec<double> flux(static_cast<num::idx>(n), 0.0);
     // Estimate the activity carried by each state.
     double total_flux = 0.0;
     for (int i = 0; i < n; ++i) {

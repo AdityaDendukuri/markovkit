@@ -1,4 +1,5 @@
 #pragma once
+#include "container/vector.hpp"
 
 #include "core/types.hpp"
 #include "markovkit/state.hpp"
@@ -6,7 +7,7 @@
 
 namespace markovkit {
 
-/// Piecewise-constant sample path. Reactions records only actual jumps.
+/// Piecewise-constant sample path. Reactions record only actual jumps.
 struct trajectory {
     num::array<double> times;
     num::array<state> states;
@@ -14,11 +15,10 @@ struct trajectory {
 };
 
 /// Extract one species from every recorded trajectory state.
-template <typename Traj>
-inline num::vec trajectory_component(const Traj &trajectory, std::size_t species) {
-    num::vec values(trajectory.states.size());
+inline num::vec<double> trajectory_component(const trajectory &path, std::size_t species) {
+    num::vec<double> values(path.states.size());
     for (num::idx index = 0; index < values.size(); ++index) {
-        const auto &state = trajectory.states[index];
+        const auto &state = path.states[index];
         if (species >= state.size()) {
             throw std::out_of_range("trajectory species index is out of range");
         }
@@ -28,10 +28,9 @@ inline num::vec trajectory_component(const Traj &trajectory, std::size_t species
 }
 
 /// Locate the piecewise-constant trajectory state at each observation time.
-template <typename Traj>
-inline num::array<num::idx> trajectory_indices_at(const Traj &trajectory,
+inline num::array<num::idx> trajectory_indices_at(const trajectory &path,
                                                   num::view<const double> observation_times) {
-    if (trajectory.times.empty() || trajectory.times.size() != trajectory.states.size()) {
+    if (path.times.empty() || path.times.size() != path.states.size()) {
         throw std::invalid_argument("trajectory times and states must be nonempty and aligned");
     }
     num::array<num::idx> indices;
@@ -42,8 +41,7 @@ inline num::array<num::idx> trajectory_indices_at(const Traj &trajectory,
         if (observation > 0 && time < observation_times[observation - 1]) {
             throw std::invalid_argument("observation times must be ordered");
         }
-        while (state_index + 1 < trajectory.times.size() &&
-               trajectory.times[state_index + 1] <= time) {
+        while (state_index + 1 < path.times.size() && path.times[state_index + 1] <= time) {
             ++state_index;
         }
         indices.push_back(state_index);

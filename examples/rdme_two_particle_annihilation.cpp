@@ -1,6 +1,6 @@
 #include "core/types.hpp"
 #include "linear/expv/expv.hpp"
-#include "linear/solvers/math_gmres.hpp"
+#include "linear/solvers/gmres.hpp"
 #include "plot/plot.hpp"
 #include "rdme/rdme.hpp"
 #include "structures/graph/structured_grid.hpp"
@@ -56,11 +56,11 @@ double milliseconds(clock::time_point begin, clock::time_point end) {
 }
 
 template <typename Preconditioner, typename System>
-observation solve(const System &system, const Preconditioner &preconditioner, const num::vec &rhs,
+observation solve(const System &system, const Preconditioner &preconditioner, const num::vec<double> &rhs,
                   num::idx vacuum, num::idx joint_begin, num::idx joint_end, double shift,
-                  const num::vec &reaction_rates, const num::gmres_options &options,
+                  const num::vec<double> &reaction_rates, const num::gmres_options &options,
                   double setup_ms, std::size_t levels) {
-    num::vec solution(system.rows(), 0.0);
+    num::vec<double> solution(system.rows(), 0.0);
     const auto begin = clock::now();
     const auto result = num::gmres(system, preconditioner, rhs, solution, options);
     const auto end = clock::now();
@@ -84,10 +84,10 @@ observation solve(const System &system, const Preconditioner &preconditioner, co
 }
 
 template <typename System>
-observation solve_plain(const System &system, const num::vec &rhs, num::idx vacuum,
+observation solve_plain(const System &system, const num::vec<double> &rhs, num::idx vacuum,
                         num::idx joint_begin, num::idx joint_end, double shift,
-                        const num::vec &reaction_rates, const num::gmres_options &options) {
-    num::vec solution(system.rows(), 0.0);
+                        const num::vec<double> &reaction_rates, const num::gmres_options &options) {
+    num::vec<double> solution(system.rows(), 0.0);
     const auto begin = clock::now();
     const auto result = num::gmres(system, rhs, solution, options);
     const auto end = clock::now();
@@ -219,7 +219,7 @@ void save_configuration_density_plot() {
     rdme::configuration initial_configuration(generator.state_space().layout().size(), 0);
     initial_configuration[generator.state_space().layout().index(0, 0)] = 1;
     initial_configuration[generator.state_space().layout().index(cells - 1, 1)] = 1;
-    num::vec initial(generator.rows(), 0.0);
+    num::vec<double> initial(generator.rows(), 0.0);
     initial[generator.state_space().find(initial_configuration)] = 1.0;
 
     num::idx joint_sector = rdme::reaction_state_space::npos;
@@ -235,10 +235,10 @@ void save_configuration_density_plot() {
     const num::idx joint_end = generator.state_space().sector_offsets()[joint_sector + 1];
 
     const num::static_array<double, 4> times{0.002, 0.02, 0.1, 0.5};
-    num::static_array<num::vec, 4> densities;
+    num::static_array<num::vec<double>, 4> densities;
     num::static_array<double, 4> survival{};
     num::static_array<double, 4> color_max{};
-    num::vec probability = initial;
+    num::vec<double> probability = initial;
     double current_time = 0.0;
     for (std::size_t snapshot = 0; snapshot < times.size(); ++snapshot) {
         while (current_time < times[snapshot]) {
@@ -254,7 +254,7 @@ void save_configuration_density_plot() {
         }
         if (std::abs(total_probability - 1.0) > 1e-8 || minimum_probability < -1e-10)
             throw std::runtime_error("transient RDME probability check failed");
-        densities[snapshot] = num::vec(cells * cells, 0.0);
+        densities[snapshot] = num::vec<double>(cells * cells, 0.0);
         for (num::idx state = joint_begin; state < joint_end; ++state) {
             const auto &configuration = generator.state_space()[state];
             num::idx a_voxel = cells;
@@ -343,7 +343,7 @@ void run_case(const benchmark_case &problem) {
     const num::idx joint_end = generator.state_space().sector_offsets()[joint_sector + 1];
     const num::idx vacuum = generator.state_space().find(
         rdme::configuration(generator.state_space().layout().size(), 0));
-    num::vec reaction_rates(generator.rows(), 0.0);
+    num::vec<double> reaction_rates(generator.rows(), 0.0);
     for (num::idx state = joint_begin; state < joint_end; ++state) {
         const auto &configuration = generator.state_space()[state];
         for (num::idx voxel = 0; voxel < generator.model().domain().n_voxels(); ++voxel) {
@@ -371,7 +371,7 @@ void run_case(const benchmark_case &problem) {
         rdme::configuration initial(generator.state_space().layout().size(), 0);
         initial[generator.state_space().layout().index(a_voxel, 0)] = 1;
         initial[generator.state_space().layout().index(b_voxel, 1)] = 1;
-        num::vec rhs(generator.rows(), 0.0);
+        num::vec<double> rhs(generator.rows(), 0.0);
         rhs[generator.state_space().find(initial)] = 1.0;
 
         const observation plain = solve_plain(system, rhs, vacuum, joint_begin, joint_end,

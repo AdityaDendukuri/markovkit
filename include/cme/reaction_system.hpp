@@ -24,6 +24,10 @@ struct reaction_system {
             throw std::invalid_argument(
                 "reaction changes and propensities must have the same size");
         }
+        for (const auto &change : changes) {
+            if (change.size() != changes.front().size())
+                throw std::invalid_argument("reaction changes must have the same species count");
+        }
     }
 
     [[nodiscard]] double evaluate_propensities(const markovkit::state &state,

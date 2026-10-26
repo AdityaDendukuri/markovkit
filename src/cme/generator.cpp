@@ -14,9 +14,8 @@ generator_result build_generator(const state_space &sp, const reaction_system &m
     cols.reserve(rows.capacity());
     vals.reserve(rows.capacity());
 
-    num::vec exit_rate_boundary(static_cast<num::idx>(n), 0.0);
-    num::vec diag(static_cast<num::idx>(n), 0.0);
-    num::array<markovkit::boundary_transition> boundary;
+    num::vec<double> exit_rate_boundary(static_cast<num::idx>(n), 0.0);
+    num::vec<double> diag(static_cast<num::idx>(n), 0.0);
 
     // Assemble column-oriented jumps and record exits.
     for (int j = 0; j < n; ++j) {
@@ -30,7 +29,9 @@ generator_result build_generator(const state_space &sp, const reaction_system &m
                 continue;
             }
 
-            markovkit::state y = x + model.changes[k];
+            markovkit::state y = x;
+            for (num::idx species = 0; species < y.size(); ++species)
+                y[species] += model.changes[k][species];
             auto it = sp.index.find(y);
             if (it != sp.index.end()) {
                 int i = it->second;
@@ -40,7 +41,6 @@ generator_result build_generator(const state_space &sp, const reaction_system &m
                 col_sum += alpha;
             } else {
                 exit_rate_boundary[j] += alpha;
-                boundary.push_back({static_cast<num::idx>(j), y, alpha});
                 // Absorbing FSP keeps outward rates in the diagonal, so mass can leave.
                 if (absorbing) {
                     col_sum += alpha;
@@ -59,16 +59,7 @@ generator_result build_generator(const state_space &sp, const reaction_system &m
     num::spmat A = num::spmat::from_triplets(static_cast<num::idx>(n), static_cast<num::idx>(n),
                                              rows, cols, vals);
 
-    // Boundary metadata supports truncation control and ELSE exits.
-    return {std::move(A), std::move(exit_rate_boundary), std::move(diag), std::move(boundary)};
-}
-
-restricted_generator restrict_cme(const state_space &states, const reaction_system &model,
-                                  const num::array<double> &rates, double time) {
-    // Keep boundary loss in the restricted generator diagonal.
-    auto assembled = build_generator(states, model, rates, time, true);
-    return {states.states, states.index, std::move(assembled.matrix), std::move(assembled.boundary),
-            false};
+    return {std::move(A), std::move(exit_rate_boundary), std::move(diag)};
 }
 
 } // namespace cme

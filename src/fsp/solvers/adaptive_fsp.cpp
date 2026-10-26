@@ -1,6 +1,7 @@
 #include "fsp/solvers/adaptive_fsp.hpp"
 #include "cme/generator.hpp"
 #include "cme/state_space.hpp"
+#include "linear/expv/expv.hpp"
 #include "markovkit/statistics.hpp"
 #include <algorithm>
 #include <cmath>
@@ -24,11 +25,11 @@ solve_adaptive_fsp(const fsp_problem &prob, const adaptive_fsp_params &params) {
     fsp_solution sol;
     sol.n_species = n_species;
     sol.times.push_back(t0);
-    sol.snapshots.push_back({sp.states, num::vec(sp.probs)});
+    sol.snapshots.push_back({sp.states, num::vec<double>(sp.probs)});
     sol.state_space_sizes.push_back(sp.size());
 
     adaptive_fsp_diagnostics diag;
-    std::mt19937 rng(params.rng_seed);
+    num::rng rng(params.rng_seed);
 
     double t = t0;
     int iter = 0;
@@ -44,7 +45,7 @@ solve_adaptive_fsp(const fsp_problem &prob, const adaptive_fsp_params &params) {
         }
 
         auto generator = cme::build_generator(sp, model, rates, t, false);
-        num::vec reaction_rates(generator.diagonal_rates.size());
+        num::vec<double> reaction_rates(generator.diagonal_rates.size());
         for (num::idx i = 0; i < reaction_rates.size(); ++i) {
             reaction_rates[i] = generator.diagonal_rates[i] + generator.boundary_rates[i];
         }
@@ -57,16 +58,14 @@ solve_adaptive_fsp(const fsp_problem &prob, const adaptive_fsp_params &params) {
         double dt_flux = (phi > 0.0) ? params.eps_dt / phi : (tf - t);
         double dt = std::min(dt_flux, tf - t);
 
-        num::vec p_in(sp.probs);
+        num::vec<double> p_in(sp.probs);
 
         // Apply the CME exponential over the selected interval.
-        num::vec p_out = num::expv(dt, generator.matrix, p_in, params.krylov_m, params.krylov_tol);
+        num::vec<double> p_out =
+            num::expv(dt, generator.matrix, p_in, params.krylov_m, params.krylov_tol);
 
-        for (double &value : p_out) {
-            value = std::max(0.0, value);
-        }
-        sp.probs.resize(n);
-        num::copy_to(p_out, sp.probs);
+        for (int i = 0; i < n; ++i)
+            sp.probs[i] = std::max(0.0, p_out[i]);
 
         // Prune after propagation, while retaining states carrying appreciable flux.
         sp.compress(model, rates, t, params.prob_quantile, params.flux_tolerance, reaction_rates);
@@ -103,14 +102,14 @@ solve_adaptive_fsp(const fsp_problem &prob, const adaptive_fsp_params &params) {
         if (iter % params.save_interval == 0 || t >= tf) {
             // Save only configured checkpoints and the final state.
             sol.times.push_back(t);
-            sol.snapshots.push_back({sp.states, num::vec(sp.probs)});
+            sol.snapshots.push_back({sp.states, num::vec<double>(sp.probs)});
             sol.state_space_sizes.push_back(sp.size());
         }
     }
 
     if (sol.times.back() < t - (1e-15 * std::abs(t))) {
         sol.times.push_back(t);
-        sol.snapshots.push_back({sp.states, num::vec(sp.probs)});
+        sol.snapshots.push_back({sp.states, num::vec<double>(sp.probs)});
         sol.state_space_sizes.push_back(sp.size());
     }
 

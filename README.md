@@ -2,29 +2,19 @@
 
 MarkovKit is a C++20 library for continuous-time Markov chains and stochastic
 reaction networks. It provides finite-state projection (FSP), stochastic
-simulation, reaction-diffusion master-equation (RDME) models, and exact linear
-subnetwork elimination (ELSE).
+simulation, and reaction-diffusion master-equation (RDME) models.
 
 ## Methods
 
 - **FSP**
   - `solve_adaptive_fsp`: flux-controlled state-space growth
   - `solve_krylov_fsp`: Krylov propagation with the Vo–Sidje mass-loss criterion
-- **ELSE** (header-only, tracks the [else](../else) paper code)
-  - `restriction` / `make_subnetwork`: restricted generators with dense,
-    block-tridiagonal, or symmetrized Cholesky factorizations
-  - `entrance_law`: occupation moments shared by every trajectory at one entrance
-  - `shedding_state` / `score_states`: expected-entries, exact, and probed cut-time shedding
-  - `else_ensemble`: labeled ensembles with Woodbury factor reuse between macrosteps
-  - `make_density_chain` / `inverse_laplace_density`: Talbot density recovery
-    from shifted resolvent solves
-  - `laplacian_subnetwork` / `laplacian_else_trajectory`: reversible graph Laplacians
 - **SSA**
   - `gillespie`: exact direct-method simulation
   - `tau_leaping`: approximate Poisson tau-leaping
 - **RDME**
   - `voxel_domain`: structured or unstructured finite-volume diffusion geometry
-  - `diffusion_state_space`: dynamic fixed-population sectors beyond the CME state limit
+  - `diffusion_state_space`: fixed-population sectors with dynamic molecule-count arrays
   - `diffusion_generator`: cached, allocation-free matrix-free generator application
   - `reaction_state_space`: contiguous unions of population sectors exposing block structure
   - `restricted_generator`: cached reaction-diffusion topology with allocation-free rate refresh
@@ -38,16 +28,16 @@ solves, Talbot inversion, JSON input, and plotting. The two repositories should
 be adjacent when building from source.
 
 Shared CME types live under `cme/`: reaction systems, finite state spaces,
-generator restrictions, and reversible representations. `fsp/`, `ssa/`, and
-`else/` contain method-specific policies and algorithms. The legacy
+and the generator on a finite state space. `fsp/`, `ssa/`, and
+`rdme/` contain method-specific policies and algorithms. The legacy
 `fsp/{boundary,generator,state_space}.hpp` and `markovkit/reaction_system.hpp`
 headers remain as forwarding compatibility headers.
 
 Every name is `snake_case`, matching Numerics; only template parameters
 (`State`, `Graph`, `Solver`) keep CamelCase. Storage uses Numerics' container
-vocabulary: `num::array<T>` where a sequence grows, `num::vec`/`num::mat` for
+vocabulary: `num::array<T>` where a sequence grows, `num::vec<double>`/`num::mat<double>` for
 fixed-length numeric data, `num::view<T>` for non-owning windows, and
-`num::table`/`num::sorted_table`/`num::key_set` for hashed and ordered lookup.
+`num::unordered_map`/`num::map`/`num::set` for hashed and ordered lookup.
 
 `reaction_system` centralizes propensity evaluation. Shared distribution and
 trajectory utilities provide species means, marginals, component extraction,
@@ -112,14 +102,23 @@ children of one coarse voxel; trivial blocks are skipped and residuals are
 updated sparsely.  Norms use the inverse-multinomial stationary weight, the
 natural reversible norm for probability errors in a fixed diffusion sector.
 
-ELSE examples (Oregonator and toggle-switch ensembles, Laplacian densities and
-trajectories) live in the adjacent [else](../else) repository, which builds
-against MarkovKit. The `laplacians/*.json` inputs they read are kept here; each
-JSON object contains the sparse symmetric matrix `L`, the stationary square root
-`h`, and the five-column committor matrix `C`.
+Subnetwork sweeping (`subsweep`) is vendored under `include/subsweep/`; include
+`<subsweep.hpp>`. Its development copy lives in the adjacent `else` repository.
+The `laplacians/*.json` inputs its Laplacian examples read are kept here; each JSON
+object contains the sparse symmetric matrix `L`, the stationary square root `h`,
+and the five-column committor matrix `C`.
 
 PNG rendering requires `gnuplot`.
 
 ## License
 
 MIT License.
+
+## Code conventions
+
+This is a research prototype. Molecule counts use `num::array<int>` in both
+CME and RDME code; RDME coordinates are ordered by voxel, then species.
+There is no separate count container or generator workspace: allocate a
+`num::vec<double> image(generator.rows())` and call `generator.apply(p, image)`.
+Use Numerics for numeric storage, sparse matrices, factorizations, and Krylov
+solvers. Keep model construction and numerical steps explicit.

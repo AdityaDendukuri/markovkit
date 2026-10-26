@@ -1,4 +1,5 @@
 #pragma once
+#include "container/matrix.hpp"
 #include "core/types.hpp"
 #include "markovkit/state.hpp"
 
@@ -7,7 +8,7 @@ namespace fsp {
 /// Probability values and the states to which they correspond.
 struct fsp_snapshot {
     num::array<markovkit::state> states;
-    num::vec probs;
+    num::vec<double> probs;
 };
 
 /// Saved finite-state probability distributions over time.
@@ -20,7 +21,7 @@ struct fsp_solution {
     [[nodiscard]] int n_snapshots() const { return static_cast<int>(times.size()); }
 
     // Computes species means per snapshot: (n_snapshots x n_species)
-    [[nodiscard]] num::mat mean_trajectory() const;
+    [[nodiscard]] num::mat<double> mean_trajectory() const;
 
     // Marginal distribution of one species at given snapshot index
     [[nodiscard]] num::map<int, double> marginal(int snapshot_idx, int species) const;

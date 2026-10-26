@@ -2,6 +2,8 @@
 #include "cme/boundary.hpp"
 #include "cme/reaction_system.hpp"
 #include "core/types.hpp"
+#include "stats/selection.hpp"
+#include "stochastic/rng.hpp"
 #include <cstddef>
 #include <random>
 #include <utility>
@@ -12,7 +14,7 @@ namespace cme {
 struct state_space {
     num::array<markovkit::state> states;
     num::array<double> probs;
-    num::unordered_map<markovkit::state, int> index;
+    num::unordered_map<markovkit::state, int, markovkit::state_hash> index;
 
     [[nodiscard]] int size() const { return static_cast<int>(states.size()); }
     [[nodiscard]] bool empty() const { return states.empty(); }
@@ -34,7 +36,7 @@ struct state_space {
 
     // Add one propensity-weighted neighbor per state and shell.
     void expand_ssa(const reaction_system &model, const num::array<double> &rates, double t,
-                    const boundary_condition &bc, int depth, std::mt19937 &rng);
+                    const boundary_condition &bc, int depth, num::rng &rng);
 
     // Prune low-probability candidates whose outgoing flux is negligible.
     // An empty `precomputed_exit_rates` recomputes total propensities locally.

@@ -15,7 +15,6 @@ FetchContent_MakeAvailable(numerics)
 add_library(markovkit
     src/cme/state_space.cpp
     src/cme/generator.cpp
-    src/cme/reversible.cpp
     src/fsp/solution.cpp
     src/fsp/solvers/adaptive_fsp.cpp
     src/fsp/solvers/krylov_fsp.cpp

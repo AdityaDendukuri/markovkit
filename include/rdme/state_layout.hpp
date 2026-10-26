@@ -29,7 +29,7 @@ class state_layout {
         if (voxel >= voxel_count_ || species >= species_count_) {
             throw std::out_of_range("RDME voxel/species coordinate is outside the state layout");
         }
-        return voxel * species_count_ + species;
+        return (voxel * species_count_) + species;
     }
 
     template <class State>

@@ -22,9 +22,8 @@ enum class boundary_mode { reflecting, absorbing };
 template <voxel_graph Graph>
 class restricted_generator {
   public:
-    using domain_type = num::vec;
-    using codomain_type = num::vec;
-    using math_laws = num::math::type_list<num::law::linear_map>;
+    using domain_type = num::vec<double>;
+    using codomain_type = num::vec<double>;
 
     struct transition {
         num::idx destination{};
@@ -87,7 +86,7 @@ class restricted_generator {
         }
     }
 
-    void apply(const num::vec &x, num::vec &y) const {
+    void apply(const num::vec<double> &x, num::vec<double> &y) const {
         if (x.size() != rows() || y.size() != rows()) {
             throw std::invalid_argument("RDME restricted generator vector size mismatch");
         }
@@ -101,11 +100,6 @@ class restricted_generator {
                 y[transition.destination] += transition.rate * probability;
             }
         }
-    }
-
-    [[nodiscard]] const num::vec &apply(const num::vec &x, generator_workspace &workspace) const {
-        apply(x, workspace.output());
-        return workspace.output();
     }
 
     [[nodiscard]] num::spmat to_sparse() const {
@@ -153,8 +147,9 @@ class restricted_generator {
                         const std::size_t source_coordinate =
                             layout.index(static_cast<std::size_t>(source_voxel), species);
                         const int molecules = state[source_coordinate];
-                        if (molecules == 0)
+                        if (molecules == 0) {
                             continue;
+                        }
                         configuration destination = state;
                         --destination[source_coordinate];
                         ++destination[layout.index(static_cast<std::size_t>(destination_voxel),
@@ -181,8 +176,9 @@ class restricted_generator {
                         count += model_.reactions()[reaction_index].change[species];
                         physically_valid = physically_valid && count >= 0;
                     }
-                    if (!physically_valid)
+                    if (!physically_valid) {
                         continue;
+                    }
 
                     const num::idx destination_state = state_space_.find(destination);
                     if (destination_state != reaction_state_space::npos) {

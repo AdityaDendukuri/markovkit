@@ -14,7 +14,7 @@ struct leap_options {
 };
 
 /// Poisson tau-leaping templated over PRNG.
-template <typename rng_state = std::mt19937_64>
+template <typename rng_state = num::rng>
 inline markovkit::trajectory tau_leaping(const markovkit::reaction_system &model,
                                          const num::array<double> &rates,
                                          const markovkit::state &initial, double t0, double tf,
@@ -26,7 +26,7 @@ inline markovkit::trajectory tau_leaping(const markovkit::reaction_system &model
 
     markovkit::state current = initial;
     double t = t0;
-    num::vec prop(model.size(), 0.0);
+    num::vec<double> prop(model.size(), 0.0);
 
     // Recompute propensities at the start of every leap.
     while (t < tf) {
@@ -69,8 +69,8 @@ inline markovkit::trajectory tau_leaping(const markovkit::reaction_system &model
                                          const num::array<double> &rates,
                                          const markovkit::state &initial, double t0, double tf,
                                          leap_options options = {}, int seed = 42) {
-    std::mt19937 rng(static_cast<unsigned int>(seed));
-    return tau_leaping<std::mt19937>(model, rates, initial, t0, tf, options, rng);
+    num::rng rng(static_cast<unsigned int>(seed));
+    return tau_leaping(model, rates, initial, t0, tf, options, rng);
 }
 
 } // namespace ssa

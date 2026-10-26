@@ -178,28 +178,61 @@ enum class population_smoother { weighted_jacobi, aggregate_block };
 
 /// A recursive geometric V-cycle for a shifted fixed-sector diffusion operator.
 ///
-/// The historical name is retained for source compatibility. Intermediate levels
-/// are matrix-free; only a terminal configuration space below `coarse_max_states`
-/// is assembled and factored. On a uniform factor-two grid, doubling diffusivity
-/// on every coarse level is exactly the conservative Petrov--Galerkin operator R A P.
+/// Intermediate levels are matrix-free; only a terminal configuration space below
+/// `coarse_max_states` is assembled and factored. On a uniform factor-two grid, doubling
+/// diffusivity on every coarse level is exactly the conservative Petrov--Galerkin operator R A P.
 template <std::size_t D, typename Weight = double, std::integral Index = num::idx>
-class two_level_population_multigrid {
+class population_multigrid {
   public:
     using graph_type = num::structured_grid_graph<D, Weight, Index>;
-    using domain_type = num::vec;
-    using codomain_type = num::vec;
-    using math_laws = num::math::type_list<num::law::linear_map>;
+    using domain_type = num::vec<double>;
+    using codomain_type = num::vec<double>;
 
-    two_level_population_multigrid(
-        voxel_domain<graph_type> domain, num::array<int> species_totals, double shift,
-        std::size_t pre_sweeps = 2, std::size_t post_sweeps = 2, double jacobi_weight = 2.0 / 3.0,
-        num::idx coarse_max_states = 4, std::size_t max_levels = 32, std::size_t coarse_cycles = 1,
-        std::size_t sweep_growth = 0,
-        population_smoother smoother = population_smoother::weighted_jacobi)
-        : two_level_population_multigrid(private_tag{}, std::move(domain),
-                                         std::move(species_totals), shift, pre_sweeps, post_sweeps,
-                                         jacobi_weight, coarse_max_states, max_levels,
-                                         coarse_cycles, sweep_growth, smoother, 1) {}
+    population_multigrid(voxel_domain<graph_type> domain, num::array<int> species_totals,
+                         double shift, std::size_t pre_sweeps = 2, std::size_t post_sweeps = 2,
+                         double jacobi_weight = 2.0 / 3.0, num::idx coarse_max_states = 4,
+                         std::size_t max_levels = 32, std::size_t coarse_cycles = 1,
+                         std::size_t sweep_growth = 0,
+                         population_smoother smoother = population_smoother::weighted_jacobi)
+        : fine_generator_(std::move(domain), species_totals), shift_(checked_shift(shift)),
+          pre_sweeps_(pre_sweeps), post_sweeps_(post_sweeps),
+          jacobi_weight_(checked_jacobi_weight(jacobi_weight)), coarse_cycles_(coarse_cycles),
+          smoother_(smoother), rhs_(rows(), 0.0), solution_(rows(), 0.0),
+          system_image_(rows(), 0.0), generator_image_(rows(), 0.0), residual_(rows(), 0.0),
+          correction_(rows(), 0.0) {
+        if (coarse_max_states == 0) {
+            throw std::invalid_argument("RDME coarse state threshold must be positive");
+        }
+        if (max_levels == 0) {
+            throw std::invalid_argument("RDME maximum multigrid levels must be positive");
+        }
+        if (coarse_cycles == 0) {
+            throw std::invalid_argument("RDME coarse cycle count must be positive");
+        }
+        if (rows() > coarse_max_states && max_levels > 1 &&
+            can_coarsen(fine_generator_.domain().graph())) {
+            transfer_ = std::make_unique<population_transfer<D, Weight, Index>>(
+                fine_generator_.domain().graph(), fine_generator_.state_space(), species_totals);
+            auto coarse_diffusivities = fine_generator_.domain().diffusivities();
+            for (double &diffusivity : coarse_diffusivities)
+                diffusivity *= 2.0;
+            voxel_domain<graph_type> coarse_domain(transfer_->coarse_graph(),
+                                                   std::move(coarse_diffusivities));
+            coarse_level_ = std::make_unique<population_multigrid>(
+                std::move(coarse_domain), std::move(species_totals), shift_,
+                pre_sweeps_ + sweep_growth, post_sweeps_ + sweep_growth, jacobi_weight_,
+                coarse_max_states, max_levels - 1, coarse_cycles_, sweep_growth, smoother_);
+            coarse_rhs_ = num::vec<double>(transfer_->coarse_size(), 0.0);
+            coarse_solution_ = num::vec<double>(transfer_->coarse_size(), 0.0);
+            coarse_system_image_ = num::vec<double>(transfer_->coarse_size(), 0.0);
+            coarse_residual_ = num::vec<double>(transfer_->coarse_size(), 0.0);
+            coarse_correction_ = num::vec<double>(transfer_->coarse_size(), 0.0);
+            if (smoother_ == population_smoother::aggregate_block)
+                build_aggregate_blocks();
+        } else {
+            terminal_factor_ = factor_terminal_system();
+        }
+    }
 
     [[nodiscard]] num::idx rows() const noexcept { return fine_generator_.rows(); }
     [[nodiscard]] num::idx cols() const noexcept { return fine_generator_.cols(); }
@@ -216,7 +249,7 @@ class two_level_population_multigrid {
     [[nodiscard]] bool has_coarse_level() const noexcept {
         return static_cast<bool>(coarse_level_);
     }
-    [[nodiscard]] const two_level_population_multigrid *coarse_level() const noexcept {
+    [[nodiscard]] const population_multigrid *coarse_level() const noexcept {
         return coarse_level_.get();
     }
     [[nodiscard]] const diffusion_generator<graph_type> &fine_generator() const noexcept {
@@ -227,11 +260,8 @@ class two_level_population_multigrid {
             throw std::logic_error("terminal RDME multigrid level has no transfer");
         return *transfer_;
     }
-    [[nodiscard]] const num::mat &coarse_inverse() const noexcept {
-        return coarse_level_ ? coarse_level_->coarse_inverse() : exact_inverse_;
-    }
 
-    void apply_system(const num::vec &x, num::vec &y) const {
+    void apply_system(const num::vec<double> &x, num::vec<double> &y) const {
         if (x.size() != rows() || y.size() != rows()) {
             throw std::invalid_argument("RDME shifted diffusion vector size mismatch");
         }
@@ -243,7 +273,7 @@ class two_level_population_multigrid {
 
     /// Apply the level smoother to an existing iterate. This is primarily useful for
     /// diagnostics; a zero right-hand side exposes its error-propagation operator.
-    void relax(const num::vec &rhs, num::vec &solution, std::size_t sweeps = 1,
+    void relax(const num::vec<double> &rhs, num::vec<double> &solution, std::size_t sweeps = 1,
                bool reverse = false) const {
         if (rhs.size() != rows() || solution.size() != rows()) {
             throw std::invalid_argument("RDME smoother vector size mismatch");
@@ -254,7 +284,7 @@ class two_level_population_multigrid {
         solution = solution_;
     }
 
-    void apply(const num::vec &x, num::vec &y) const { apply_block(x, y); }
+    void apply(const num::vec<double> &x, num::vec<double> &y) const { apply_block(x, y); }
 
     void apply_block(num::view<const double> x, num::view<double> y) const {
         if (x.size() != rows() || y.size() != rows()) {
@@ -285,7 +315,7 @@ class two_level_population_multigrid {
             }
             transfer_->prolong(coarse_solution_, correction_);
         } else {
-            multiply_exact_inverse(residual_, correction_);
+            num::solve(terminal_factor_, residual_, correction_);
         }
         for (num::idx state = 0; state < rows(); ++state)
             solution_[state] += correction_[state];
@@ -295,60 +325,6 @@ class two_level_population_multigrid {
     }
 
   private:
-    struct private_tag {};
-
-    two_level_population_multigrid(private_tag, voxel_domain<graph_type> domain,
-                                   num::array<int> species_totals, double shift,
-                                   std::size_t pre_sweeps, std::size_t post_sweeps,
-                                   double jacobi_weight, num::idx coarse_max_states,
-                                   std::size_t max_levels, std::size_t coarse_cycles,
-                                   std::size_t sweep_growth, population_smoother smoother,
-                                   std::size_t level)
-        : fine_generator_(std::move(domain), species_totals), shift_(checked_shift(shift)),
-          pre_sweeps_(pre_sweeps), post_sweeps_(post_sweeps),
-          jacobi_weight_(checked_jacobi_weight(jacobi_weight)), coarse_cycles_(coarse_cycles),
-          smoother_(smoother), rhs_(rows(), 0.0), solution_(rows(), 0.0),
-          system_image_(rows(), 0.0), generator_image_(rows(), 0.0), residual_(rows(), 0.0),
-          correction_(rows(), 0.0) {
-        if (coarse_max_states == 0) {
-            throw std::invalid_argument("RDME coarse state threshold must be positive");
-        }
-        if (max_levels == 0) {
-            throw std::invalid_argument("RDME maximum multigrid levels must be positive");
-        }
-        if (coarse_cycles == 0) {
-            throw std::invalid_argument("RDME coarse cycle count must be positive");
-        }
-        if (rows() > coarse_max_states && level < max_levels &&
-            can_coarsen(fine_generator_.domain().graph())) {
-            transfer_ = std::make_unique<population_transfer<D, Weight, Index>>(
-                fine_generator_.domain().graph(), fine_generator_.state_space(), species_totals);
-            num::array<double> coarse_diffusivities(
-                fine_generator_.domain().diffusivities().begin(),
-                fine_generator_.domain().diffusivities().end());
-            for (double &diffusivity : coarse_diffusivities)
-                diffusivity *= 2.0;
-            voxel_domain<graph_type> coarse_domain(
-                transfer_->coarse_graph(),
-                num::array<double>(coarse_diffusivities.begin(), coarse_diffusivities.end()));
-            coarse_level_ =
-                std::unique_ptr<two_level_population_multigrid>(new two_level_population_multigrid(
-                    private_tag{}, std::move(coarse_domain), std::move(species_totals), shift_,
-                    pre_sweeps_ + sweep_growth, post_sweeps_ + sweep_growth, jacobi_weight_,
-                    coarse_max_states, max_levels, coarse_cycles_, sweep_growth, smoother_,
-                    level + 1));
-            coarse_rhs_ = num::vec(transfer_->coarse_size(), 0.0);
-            coarse_solution_ = num::vec(transfer_->coarse_size(), 0.0);
-            coarse_system_image_ = num::vec(transfer_->coarse_size(), 0.0);
-            coarse_residual_ = num::vec(transfer_->coarse_size(), 0.0);
-            coarse_correction_ = num::vec(transfer_->coarse_size(), 0.0);
-            if (smoother_ == population_smoother::aggregate_block)
-                build_aggregate_blocks();
-        } else {
-            exact_inverse_ = build_exact_inverse();
-        }
-    }
-
     [[nodiscard]] static double checked_shift(double shift) {
         if (!(shift > 0.0) || !std::isfinite(shift)) {
             throw std::invalid_argument("RDME multigrid shift must be finite and positive");
@@ -388,34 +364,27 @@ class two_level_population_multigrid {
         return level_nonzeros() + (coarse_level_ ? coarse_level_->hierarchy_nonzeros() : 0);
     }
 
-    [[nodiscard]] num::mat build_exact_inverse() {
-        num::mat matrix(rows(), rows(), 0.0);
-        num::vec basis(rows(), 0.0);
-        num::vec image(rows(), 0.0);
-        num::vec generator_image(rows(), 0.0);
-
-        for (num::idx column = 0; column < rows(); ++column) {
-            std::fill(basis.begin(), basis.end(), 0.0);
-            basis[column] = 1.0;
-            fine_generator_.apply(basis, generator_image);
-            for (num::idx state = 0; state < rows(); ++state) {
-                image[state] = shift_ * basis[state] - generator_image[state];
-                matrix(state, column) = image[state];
+    [[nodiscard]] num::lu_result<double> factor_terminal_system() const {
+        num::mat<double> matrix(rows(), rows(), 0.0);
+        for (num::idx source = 0; source < rows(); ++source) {
+            matrix(source, source) = shift_ + fine_generator_.exit_rates()[source];
+            for (num::idx entry = fine_generator_.source_offsets()[source];
+                 entry < fine_generator_.source_offsets()[source + 1]; ++entry) {
+                const auto &jump = fine_generator_.transitions()[entry];
+                matrix(jump.destination, source) -= jump.rate;
             }
         }
-
-        const num::lu_result factor = num::unsafe::lu(matrix);
-        if (factor.singular) {
+        auto factor = num::lu(matrix);
+        if (factor.singular)
             throw std::runtime_error("RDME multigrid terminal operator is singular");
-        }
-        return num::lu_inv(factor);
+        return factor;
     }
 
     struct block {
         num::array<num::idx> states;
-        num::lu_result factor;
-        mutable num::vec rhs;
-        mutable num::vec correction;
+        num::lu_result<double> factor;
+        mutable num::vec<double> rhs;
+        mutable num::vec<double> correction;
     };
 
     using block_partition = num::array<block>;
@@ -428,7 +397,7 @@ class two_level_population_multigrid {
         block_partitions_.resize(aggregate_count);
 
         for (std::size_t aggregate = 0; aggregate < aggregate_count; ++aggregate) {
-            num::unordered_map<configuration, num::array<num::idx>, configuration_hash> groups;
+            num::unordered_map<configuration, num::array<num::idx>, markovkit::state_hash> groups;
             for (num::idx state = 0; state < rows(); ++state) {
                 configuration signature = space[state];
                 for (std::size_t voxel = 0; voxel < layout.voxel_count(); ++voxel) {
@@ -450,7 +419,7 @@ class two_level_population_multigrid {
                 for (num::idx local = 0; local < states.size(); ++local)
                     local_index[states[local]] = local;
 
-                num::mat matrix(states.size(), states.size(), 0.0);
+                num::mat<double> matrix(states.size(), states.size(), 0.0);
                 for (num::idx local_source = 0; local_source < states.size(); ++local_source) {
                     const num::idx source = states[local_source];
                     matrix(local_source, local_source) =
@@ -463,12 +432,13 @@ class two_level_population_multigrid {
                             matrix(local_destination, local_source) -= transition.rate;
                     }
                 }
-                num::lu_result factor = num::unsafe::lu(matrix);
+                num::lu_result<double> factor = num::lu(matrix);
                 if (factor.singular)
                     throw std::runtime_error("RDME aggregate smoother block is singular");
                 const num::idx block_size = states.size();
                 partition.push_back({std::move(states), std::move(factor),
-                                     num::vec(block_size, 0.0), num::vec(block_size, 0.0)});
+                                     num::vec<double>(block_size, 0.0),
+                                     num::vec<double>(block_size, 0.0)});
                 for (num::idx state : partition.back().states)
                     local_index[state] = diffusion_state_space::npos;
             }
@@ -499,7 +469,7 @@ class two_level_population_multigrid {
                         const num::idx state = block.states[local];
                         block.rhs[local] = residual_[state];
                     }
-                    num::lu_solve(block.factor, block.rhs, block.correction);
+                    num::solve(block.factor, block.rhs, block.correction);
                 }
                 for (const block &block : block_partitions_[aggregate]) {
                     for (num::idx local = 0; local < block.states.size(); ++local)
@@ -527,15 +497,6 @@ class two_level_population_multigrid {
             smooth_jacobi(sweeps);
     }
 
-    void multiply_exact_inverse(num::view<const double> x, num::view<double> y) const {
-        std::fill(y.begin(), y.end(), 0.0);
-        for (num::idx row = 0; row < rows(); ++row) {
-            for (num::idx column = 0; column < rows(); ++column) {
-                y[row] += exact_inverse_(row, column) * x[column];
-            }
-        }
-    }
-
     diffusion_generator<graph_type> fine_generator_;
     double shift_;
     std::size_t pre_sweeps_;
@@ -544,26 +505,21 @@ class two_level_population_multigrid {
     std::size_t coarse_cycles_;
     population_smoother smoother_;
     std::unique_ptr<population_transfer<D, Weight, Index>> transfer_;
-    std::unique_ptr<two_level_population_multigrid> coarse_level_;
-    num::mat exact_inverse_;
-    mutable num::vec rhs_;
-    mutable num::vec solution_;
-    mutable num::vec system_image_;
-    mutable num::vec generator_image_;
-    mutable num::vec residual_;
-    mutable num::vec correction_;
-    mutable num::vec coarse_rhs_;
-    mutable num::vec coarse_solution_;
-    mutable num::vec coarse_system_image_;
-    mutable num::vec coarse_residual_;
-    mutable num::vec coarse_correction_;
+    std::unique_ptr<population_multigrid> coarse_level_;
+    num::lu_result<double> terminal_factor_;
+    mutable num::vec<double> rhs_;
+    mutable num::vec<double> solution_;
+    mutable num::vec<double> system_image_;
+    mutable num::vec<double> generator_image_;
+    mutable num::vec<double> residual_;
+    mutable num::vec<double> correction_;
+    mutable num::vec<double> coarse_rhs_;
+    mutable num::vec<double> coarse_solution_;
+    mutable num::vec<double> coarse_system_image_;
+    mutable num::vec<double> coarse_residual_;
+    mutable num::vec<double> coarse_correction_;
     mutable num::array<block_partition> block_partitions_;
 };
-
-/// Preferred name for the recursive hierarchy. The older two-level name remains
-/// available because it was part of the first experimental API.
-template <std::size_t D, typename Weight = double, std::integral Index = num::idx>
-using population_multigrid = two_level_population_multigrid<D, Weight, Index>;
 
 /// Block preconditioner applying one population multigrid V-cycle independently
 /// to every contiguous sector of a reaction state space. Reaction couplings are
@@ -572,9 +528,8 @@ template <std::size_t D, typename Weight = double, std::integral Index = num::id
 class sector_diffusion_multigrid {
   public:
     using graph_type = num::structured_grid_graph<D, Weight, Index>;
-    using domain_type = num::vec;
-    using codomain_type = num::vec;
-    using math_laws = num::math::type_list<num::law::linear_map>;
+    using domain_type = num::vec<double>;
+    using codomain_type = num::vec<double>;
 
     sector_diffusion_multigrid(const voxel_domain<graph_type> &domain,
                                const reaction_state_space &state_space, double shift,
@@ -599,7 +554,7 @@ class sector_diffusion_multigrid {
         return result;
     }
 
-    void apply(const num::vec &x, num::vec &y) const {
+    void apply(const num::vec<double> &x, num::vec<double> &y) const {
         if (x.size() != rows() || y.size() != rows()) {
             throw std::invalid_argument("RDME sector multigrid vector size mismatch");
         }
@@ -613,18 +568,17 @@ class sector_diffusion_multigrid {
 
   private:
     num::array<num::idx> sector_offsets_;
-    num::array<two_level_population_multigrid<D, Weight, Index>> levels_;
+    num::array<population_multigrid<D, Weight, Index>> levels_;
 };
 
 template <std::size_t D, typename Weight, std::integral Index>
-two_level_population_multigrid(voxel_domain<num::structured_grid_graph<D, Weight, Index>>,
-                               num::array<int>, double, std::size_t, std::size_t, double)
-    -> two_level_population_multigrid<D, Weight, Index>;
+population_multigrid(voxel_domain<num::structured_grid_graph<D, Weight, Index>>, num::array<int>,
+                     double, std::size_t, std::size_t, double)
+    -> population_multigrid<D, Weight, Index>;
 
 template <std::size_t D, typename Weight, std::integral Index>
-two_level_population_multigrid(voxel_domain<num::structured_grid_graph<D, Weight, Index>>,
-                               num::array<int>, double)
-    -> two_level_population_multigrid<D, Weight, Index>;
+population_multigrid(voxel_domain<num::structured_grid_graph<D, Weight, Index>>, num::array<int>,
+                     double) -> population_multigrid<D, Weight, Index>;
 
 template <std::size_t D, typename Weight, std::integral Index>
 sector_diffusion_multigrid(const voxel_domain<num::structured_grid_graph<D, Weight, Index>> &,
@@ -640,5 +594,9 @@ template <std::size_t D, typename Weight, std::integral Index>
 sector_diffusion_multigrid(const voxel_domain<num::structured_grid_graph<D, Weight, Index>> &,
                            const reaction_state_space &, double)
     -> sector_diffusion_multigrid<D, Weight, Index>;
+
+// Original experimental name.
+template <std::size_t D, typename Weight = double, std::integral Index = num::idx>
+using two_level_population_multigrid = population_multigrid<D, Weight, Index>;
 
 } // namespace rdme

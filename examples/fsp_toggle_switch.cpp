@@ -1,3 +1,4 @@
+#include "plot/plot.hpp"
 #include "core/types.hpp"
 #include "markovkit.hpp"
 

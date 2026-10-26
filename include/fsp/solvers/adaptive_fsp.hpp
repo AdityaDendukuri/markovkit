@@ -26,7 +26,7 @@ struct adaptive_fsp_params {
     double abs_threshold = 0.0; // absolute probability threshold (0 = off)
 
     // (iter, t, dt, size, per_species_means, pruned_mass)
-    std::function<void(int, double, double, int, const num::vec &, double)> progress_cb;
+    std::function<void(int, double, double, int, const num::vec<double> &, double)> progress_cb;
 
     // (t, states, probs)
     std::function<void(double, const num::array<markovkit::state> &, const num::array<double> &)>

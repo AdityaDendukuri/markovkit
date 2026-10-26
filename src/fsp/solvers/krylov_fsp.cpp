@@ -1,6 +1,7 @@
 #include "fsp/solvers/krylov_fsp.hpp"
 #include "cme/generator.hpp"
 #include "cme/state_space.hpp"
+#include "linear/expv/expv.hpp"
 #include <algorithm>
 #include <cmath>
 #include <numeric>
@@ -23,12 +24,10 @@ std::tuple<fsp_solution, krylov_fsp_diagnostics> solve_krylov_fsp(const fsp_prob
     fsp_solution sol;
     sol.n_species = n_species;
     sol.times.push_back(t0);
-    sol.snapshots.push_back({sp.states, num::vec(sp.probs)});
+    sol.snapshots.push_back({sp.states, num::vec<double>(sp.probs)});
     sol.state_space_sizes.push_back(sp.size());
 
     krylov_fsp_diagnostics diag;
-    diag.reject_count = 0;
-    diag.total_iters = 0;
 
     double t = t0;
     double tau = params.tau_init;
@@ -49,9 +48,9 @@ std::tuple<fsp_solution, krylov_fsp_diagnostics> solve_krylov_fsp(const fsp_prob
         int n = sp.size();
 
         // Propagate on the current finite state space.
-        num::vec p_in(sp.probs);
+        num::vec<double> p_in(sp.probs);
 
-        num::vec w = num::expv(tau, A, p_in, params.krylov_m, params.krylov_tol);
+        num::vec<double> w = num::expv(tau, A, p_in, params.krylov_m, params.krylov_tol);
 
         // Accept only if retained mass satisfies the Vo--Sidje error budget.
         double mass = 0.0;
@@ -69,15 +68,11 @@ std::tuple<fsp_solution, krylov_fsp_diagnostics> solve_krylov_fsp(const fsp_prob
         }
 
         // Commit the accepted probability vector.
-        num::vec nonnegative = w;
-        for (double &value : nonnegative) {
-            value = std::max(0.0, value);
-        }
-        sp.probs.resize(n);
-        num::copy_to(nonnegative, sp.probs);
+        for (int i = 0; i < n; ++i)
+            sp.probs[i] = std::max(0.0, w[i]);
 
         // Remove a state only when both its probability and local derivative are small.
-        num::vec dp_dt(static_cast<num::idx>(n), 0.0);
+        num::vec<double> dp_dt(static_cast<num::idx>(n), 0.0);
         num::operators::sparse_op(A).apply(w, dp_dt);
 
         num::array<bool> remove_mask(n, false);
@@ -107,7 +102,7 @@ std::tuple<fsp_solution, krylov_fsp_diagnostics> solve_krylov_fsp(const fsp_prob
         if (accepted_steps % params.save_interval == 0 || t >= tf) {
             // Save only configured checkpoints and the final state.
             sol.times.push_back(t);
-            sol.snapshots.push_back({sp.states, num::vec(sp.probs)});
+            sol.snapshots.push_back({sp.states, num::vec<double>(sp.probs)});
             sol.state_space_sizes.push_back(sp.size());
         }
 
@@ -117,7 +112,7 @@ std::tuple<fsp_solution, krylov_fsp_diagnostics> solve_krylov_fsp(const fsp_prob
 
     if (sol.times.back() < t - (1e-15 * std::abs(t))) {
         sol.times.push_back(t);
-        sol.snapshots.push_back({sp.states, num::vec(sp.probs)});
+        sol.snapshots.push_back({sp.states, num::vec<double>(sp.probs)});
         sol.state_space_sizes.push_back(sp.size());
     }
 
