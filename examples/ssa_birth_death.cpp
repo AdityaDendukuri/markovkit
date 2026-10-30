@@ -1,31 +1,21 @@
-#include "plot/plot.hpp"
-#include "core/types.hpp"
+// Gillespie SSA and tau-leaping on a birth-death process
 #include "markovkit.hpp"
+#include "plot/plot.hpp"
+
+using namespace markovkit;
 
 int main() {
-    // This model has constant birth and count-dependent death.
-    markovkit::reaction_system model;
-    model.changes = {{1}, {-1}};
-    model.propensities = {
-        [](const markovkit::state &, const num::array<double> &r, double) { return r[0]; },
-        [](const markovkit::state &x, const num::array<double> &r, double) { return r[1] * x[0]; }};
+    const reaction_network model{{
+        {{1}, [](const state &) { return 5.0; }},
+        {{-1}, [](const state &x) { return 0.1 * x[0]; }},
+    }};
 
-    const num::array<double> rates = {5.0, 0.1};
-    const markovkit::state initial{0};
+    num::rng random(42);
+    const auto exact = gillespie(model, {0}, 20.0, random);
+    const auto leaped = tau_leaping(model, {0}, 20.0, random);
 
-    // Compare exact SSA with fixed-tolerance tau leaping.
-    const auto exact = ssa::gillespie(model, rates, initial, 0.0, 20.0, 42);
-    const auto approximate = ssa::tau_leaping(model, rates, initial, 0.0, 20.0, {}, 42);
-
-    // Extract scalar counts from the exact path.
-    const auto exact_counts = markovkit::trajectory_component(exact, 0);
-
-    // Extract scalar counts from the approximate path.
-    const auto approximate_counts = markovkit::trajectory_component(approximate, 0);
-
-    // Overlay both piecewise-constant trajectories.
-    num::plt::plot(exact.times, exact_counts, "Gillespie", "steps lw 2");
-    num::plt::plot(approximate.times, approximate_counts, "tau-leaping", "steps lw 2 dt 2");
+    num::plt::plot(exact.times, exact.component(0), "Gillespie", "steps lw 2");
+    num::plt::plot(leaped.times, leaped.component(0), "tau-leaping", "steps lw 2 dt 2");
     num::plt::xlabel("time");
     num::plt::ylabel("count");
     num::plt::legend();

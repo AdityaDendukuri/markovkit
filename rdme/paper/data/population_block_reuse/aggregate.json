@@ -1,0 +1,38 @@
+{
+  "adaptive": {
+    "wall_seconds": {
+      "baseline": 60.51994641654892,
+      "optimized": 164.53023722948274
+    },
+    "setup_seconds": {
+      "baseline": 1.1063006874999999,
+      "optimized": 0.5885846255
+    },
+    "peak_rss_bytes": {
+      "baseline": 1272635392,
+      "optimized": 1001463808
+    },
+    "speedup": 0.367834797029662,
+    "setup_reduction": 0.46797047841480255,
+    "memory_reduction": 0.21307877001113606,
+    "max_saved_vector_l1_difference": 0.0
+  },
+  "rare_fixed": {
+    "wall_seconds": {
+      "baseline": 36.5072067080182,
+      "optimized": 36.20485372946132
+    },
+    "setup_seconds": {
+      "baseline": 0.13547518749999998,
+      "optimized": 0.118778
+    },
+    "peak_rss_bytes": {
+      "baseline": 322682880,
+      "optimized": 209027072
+    },
+    "speedup": 1.008351172492401,
+    "setup_reduction": 0.12324904514341406,
+    "memory_reduction": 0.35222137598375225,
+    "max_saved_vector_l1_difference": 0.0
+  }
+}

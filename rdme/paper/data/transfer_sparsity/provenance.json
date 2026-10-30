@@ -1,0 +1,93 @@
+{
+  "experiment": "paper/data/full_multigrid/block_schlogl_v4_k40_block-ilu_s1.csv",
+  "experiment_sha256": "cac689a76001ef3ff207d1bf5aa6f5d11b4733f94bb0faedf4c377cf2ee6fb96",
+  "executable_sha256": "8a0ebeeecd092f0fdda5ac002e0627b4896baa5cba726fde0439ffe1cf585e00",
+  "source_sha256": "be19322a0dee77d6601af4cf1834e799817b375d7a8aa19624a1782f3b72a751",
+  "command": [
+    "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid",
+    "--cells",
+    "4",
+    "--dimension",
+    "1",
+    "--cap",
+    "40",
+    "--initial",
+    "8",
+    "--cycles",
+    "2",
+    "--smoother",
+    "gs",
+    "--check",
+    "--transfer-output",
+    "/Users/adityadendukuri/DiscStochSim-multigrid/paper/data/transfer_sparsity/schlogl_k40",
+    "--export-only"
+  ],
+  "ordering": "Increasing total population, then solver lexicographic weak-composition rank; zero-based indices",
+  "sampled": false,
+  "checks": [
+    {
+      "level": 0,
+      "fine_states": 135751,
+      "coarse_states": 861,
+      "nnz": 135751,
+      "max_column_sum_error": 1.1102230246251565e-15,
+      "csv_sha256": "84300b5e8a9c9aeff2080c9eb7efd22e250d1167913d124f0bbd1a0c28f36597"
+    },
+    {
+      "level": 1,
+      "fine_states": 861,
+      "coarse_states": 41,
+      "nnz": 861,
+      "max_column_sum_error": 2.220446049250313e-16,
+      "csv_sha256": "35f24f420c84dcd7ade1fc1f222c8505db3e8bcc6d97cbe028dd57073e5bf388"
+    }
+  ],
+  "block_comparison": {
+    "population": 4,
+    "group_sizes": [
+      5,
+      8,
+      9,
+      8,
+      5
+    ],
+    "permutation": [
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      50,
+      51,
+      52,
+      53,
+      44,
+      45,
+      46,
+      54,
+      55,
+      56,
+      60,
+      61,
+      62,
+      47,
+      48,
+      57,
+      58,
+      63,
+      64,
+      66,
+      67,
+      49,
+      59,
+      65,
+      68,
+      69
+    ],
+    "grouped_csv_sha256": "80d542f10c3c4cac8f2a079e8f57640bbbb988e15c52277cbbb9fdab5b0cbf79"
+  }
+}

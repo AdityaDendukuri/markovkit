@@ -1,0 +1,30 @@
+{
+  "command": [
+    "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/schlogl_spatial_front",
+    "--cells",
+    "64",
+    "--seeded",
+    "16",
+    "--volume",
+    "20",
+    "--jump",
+    "1",
+    "--paths",
+    "256",
+    "--final-time",
+    "300",
+    "--interval",
+    "2",
+    "--seed",
+    "20261021",
+    "--output-prefix",
+    "/Users/adityadendukuri/DiscStochSim-multigrid/paper/data/spatial_schlogl_front/front_v64_w20_p256_marginals",
+    "--marginals",
+    "1"
+  ],
+  "executable_sha256": "6caee44116780febd011c3f23b855c87bca43f1cf778ba8cb8e084af51cbf2a3",
+  "source_sha256": "86058f1dee979fb6c49f6b8a980daebdf8c6a71d1624aa789c15570204034b81",
+  "method": "exact direct Gillespie SSA, not multigrid",
+  "status": 0,
+  "wall_seconds": 175.96517487498932
+}

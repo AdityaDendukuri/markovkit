@@ -1,0 +1,5 @@
+check cells=16 RP=4.44089e-16 RAP=2.61555e-16
+check cells=8 RP=4.44089e-16 RAP=1.69067e-16
+check cells=4 RP=1.11022e-16 RAP=3.74118e-16
+check cells=2 RP=0 RAP=1.59945e-15
+direct l1_error=6.77559e-13 residual_bound=9.03985e-12

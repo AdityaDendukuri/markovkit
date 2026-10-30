@@ -1,0 +1,67 @@
+{
+  "schlogl": {
+    "joint_l1_difference": 1.509593104527603e-13,
+    "full_states": 1001,
+    "stored_states": 511
+  },
+  "two_voxels": {
+    "joint_l1_difference": 4.0839657884872053e-16,
+    "full_states": 91,
+    "stored_states": 49
+  },
+  "2d": {
+    "joint_l1_difference": 2.078104591463553e-13,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "2d_levels": {
+    "joint_l1_difference": 8.988049562431988e-14,
+    "full_states": 153,
+    "stored_states": 81
+  },
+  "3d": {
+    "joint_l1_difference": 2.2251130335006772e-13,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "zero_population": {
+    "joint_l1_difference": 0.0,
+    "full_states": 1,
+    "stored_states": 1
+  },
+  "zero_diffusion": {
+    "joint_l1_difference": 8.983283138995675e-18,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "direct": {
+    "joint_l1_difference": 1.6690040324005864e-13,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "v": {
+    "joint_l1_difference": 1.1071996335612076e-13,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "k": {
+    "joint_l1_difference": 1.1058506603789491e-13,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "cn": {
+    "joint_l1_difference": 1.4655888080914635e-13,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "adaptive": {
+    "joint_l1_difference": 8.313346991201778e-14,
+    "full_states": 1820,
+    "stored_states": 924
+  },
+  "adaptive_nonlinear": {
+    "joint_l1_difference": 9.241584754225935e-16,
+    "full_states": 171,
+    "stored_states": 90
+  }
+}

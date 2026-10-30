@@ -1,0 +1,19 @@
+{
+  "reference": {
+    "wall_seconds": 36.69300354097504,
+    "peak_rss_bytes": 209403904,
+    "setup_seconds": 0.119986917,
+    "cpu_seconds": 36.47369200000001
+  },
+  "structured": {
+    "wall_seconds": 35.838607874989975,
+    "peak_rss_bytes": 136110080,
+    "setup_seconds": 0.1108572075,
+    "cpu_seconds": 35.5554685
+  },
+  "wall_speedup": 1.0238400908027823,
+  "cpu_speedup": 1.0258250991686413,
+  "peak_memory_reduction": 0.35001173617087866,
+  "maximum_joint_l1_difference": 4.7641051502442e-16,
+  "maximum_peak20_relative_difference": 4.924847634097348e-14
+}

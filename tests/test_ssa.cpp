@@ -1,79 +1,76 @@
-#include "markovkit.hpp"
 #include "check.hpp"
+#include "markovkit.hpp"
 #include <cmath>
 #include <iostream>
 
+using namespace markovkit;
+
+namespace {
+
+reaction_network birth_death(real birth, real death) {
+    return {{{{1}, [=](const state &) { return birth; }},
+             {{-1}, [=](const state &x) { return death * x[0]; }}}};
+}
+
+void test_transitions() {
+    const reaction_network model{{{{1}, [](const state &) { return 2.0; }},
+                                  {{-1}, [](const state &) { return -1.0; }},
+                                  {{-4}, [](const state &) { return 1.0; }}}};
+    const auto jumps = model.transitions({3});
+    check::that(jumps.size() == 1, "nonpositive rates and negative counts are skipped");
+    check::that(jumps[0].to == state{4} && jumps[0].rate == 2.0, "the birth is listed");
+}
+
 void test_gillespie_birth_death() {
-    markovkit::reaction_system model;
-    model.changes = {{1}, {-1}};
-    model.propensities = {
-        [](const markovkit::state &, const num::array<double> &r, double) { return r[0]; },
-        [](const markovkit::state &x, const num::array<double> &r, double) { return r[1] * x[0]; }};
-
-    num::array<double> rates = {5.0, 0.1};
-    markovkit::state initial{0};
-
+    const auto model = birth_death(5.0, 0.1);
+    num::rng random(100);
     const int paths = 2000;
-    double mean = 0.0;
-    for (int i = 0; i < paths; ++i) {
-        auto path = ssa::gillespie(model, rates, initial, 0.0, 2.0, 100 + i);
-        mean += path.states.back()[0];
+    real mean = 0.0;
+    for (int k = 0; k < paths; ++k) {
+        mean += gillespie(model, {0}, 2.0, random).states.back()[0];
     }
     mean /= paths;
-
-    double expected = (5.0 / 0.1) * (1.0 - std::exp(-0.1 * 2.0));
-    check::that(std::abs(mean - expected) < 0.5, "std::abs(mean - expected) < 0.5");
-    std::cout << "[PASS] test_gillespie_birth_death (mean=" << mean << ", expected=" << expected
-              << ")\n";
+    const real exact = (5.0 / 0.1) * (1.0 - std::exp(-0.1 * 2.0));
+    check::that(std::abs(mean - exact) < 0.5, "Gillespie matches the birth-death mean");
+    std::cout << "Gillespie mean " << mean << ", exact " << exact << '\n';
 }
 
-void test_gillespie_step_limit() {
-    markovkit::reaction_system model{
-        .changes = {{1}},
-        .propensities = {[](const markovkit::state &, const auto &, double) { return 1.0; }}};
-    const auto path = ssa::gillespie(model, {}, {0}, 0.0, 100.0, 42, 5);
-    check::that(path.reactions.size() == 5, "path.reactions.size() == 5");
-    check::that(path.states.size() == 6, "path.states.size() == 6");
-    check::that(path.times.back() < 100.0, "path.times.back() < 100.0");
+void test_tau_leaping_birth_death() {
+    const auto model = birth_death(5.0, 0.1);
+    num::rng random(7);
+    const int paths = 500;
+    real mean = 0.0;
+    for (int k = 0; k < paths; ++k) {
+        mean += tau_leaping(model, {0}, 2.0, random).states.back()[0];
+    }
+    mean /= paths;
+    const real exact = (5.0 / 0.1) * (1.0 - std::exp(-0.1 * 2.0));
+    check::that(std::abs(mean - exact) < 1.0, "tau-leaping matches the birth-death mean");
 }
 
-void test_reaction_and_trajectory_helpers() {
-    markovkit::reaction_system model{
-        .changes = {{1}, {-1}},
-        .propensities = {
-            [](const markovkit::state &, const auto &, double) { return 2.0; },
-            [](const markovkit::state &, const auto &, double) { return -1.0; },
-        }};
-    num::array<double> propensities(2, 0.0);
-    check::that(model.evaluate_propensities({3}, {}, 0.0, propensities) == 2.0, "model.evaluate_propensities({3}, {}, 0.0, propensities) == 2.0");
-    check::that(propensities[0] == 2.0, "propensities[0] == 2.0");
-    check::that(propensities[1] == 0.0, "propensities[1] == 0.0");
-    check::that(model.total_propensity({3}, {}, 0.0) == 2.0, "model.total_propensity({3}, {}, 0.0) == 2.0");
-
-    const markovkit::trajectory trajectory{{0.0, 1.0, 3.0}, {{2}, {4}, {8}}, {0, 0}};
-    const num::vec<double> counts = markovkit::trajectory_component(trajectory, 0);
-    check::that(counts.size() == 3 && counts[0] == 2.0 && counts[1] == 4.0 && counts[2] == 8.0, "counts.size() == 3 && counts[0] == 2.0 && counts[1] == 4.0 && count...");
-    const num::array<double> observations{0.5, 1.0, 2.0, 4.0};
-    check::that(markovkit::trajectory_indices_at(trajectory, observations) ==
-           num::array<std::size_t>({0, 1, 1, 2}), "markovkit::trajectory_indices_at(trajectory, observations) == num::...");
+void test_jump_limit_and_custom_rng() {
+    const reaction_network model{{{{1}, [](const state &) { return 1.0; }}}};
+    std::mt19937_64 random(12345);
+    const auto path = gillespie(model, {0}, 100.0, random, 5);
+    check::that(path.states.size() == 6, "five jumps after the initial state");
+    check::that(path.times.back() < 100.0, "a path cut at max_jumps ends at its last jump");
 }
 
-void test_templated_rng() {
-    markovkit::reaction_system model{
-        .changes = {{1}},
-        .propensities = {[](const markovkit::state &, const auto &, double) { return 1.0; }}};
-    std::mt19937_64 custom_rng(12345);
-    const auto path = ssa::gillespie(model, {}, {0}, 0.0, 100.0, custom_rng, 5);
-    check::that(path.reactions.size() == 5, "path.reactions.size() == 5");
-    check::that(path.states.size() == 6, "path.states.size() == 6");
-    check::that(path.times.back() < 100.0, "path.times.back() < 100.0");
+void test_trajectory_helpers() {
+    const trajectory path{{0.0, 1.0, 3.0}, {{2}, {4}, {8}}};
+    const vec<real> counts = path.component(0);
+    check::that(counts.size() == 3 && counts[0] == 2.0 && counts[2] == 8.0, "component");
+    const array<real> observations{0.5, 1.0, 2.0, 4.0};
+    check::that(path.indices_at(observations) == array<idx>{0, 1, 1, 2}, "indices_at");
 }
+
+} // namespace
 
 int main() {
+    test_transitions();
     test_gillespie_birth_death();
-    test_gillespie_step_limit();
-    test_templated_rng();
-    test_reaction_and_trajectory_helpers();
-    std::cout << "All SSA tests passed.\n";
+    test_tau_leaping_birth_death();
+    test_jump_limit_and_custom_rng();
+    test_trajectory_helpers();
     return check::report("ssa");
 }

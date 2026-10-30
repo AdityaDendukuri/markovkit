@@ -1,0 +1,30 @@
+{
+  "command": [
+    "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid",
+    "--cycles",
+    "2",
+    "--cells",
+    "4",
+    "--cap",
+    "40",
+    "--initial",
+    "8",
+    "--diffusion",
+    "1",
+    "--shift",
+    "0.05",
+    "--method",
+    "mg",
+    "--smoother",
+    "block-ilu",
+    "--sweeps",
+    "1",
+    "--max-iterations",
+    "300",
+    "--history",
+    "/Users/adityadendukuri/DiscStochSim-multigrid/paper/data/full_multigrid/block_schlogl_v4_k40_block-ilu_s1_history.csv"
+  ],
+  "status": 0,
+  "executable_sha256": "a2dcfd58cb088aace766bde57919fc53fc3eb9bfd904aef55b9d0de59f739172",
+  "wall_seconds": 0.40023504104465246
+}

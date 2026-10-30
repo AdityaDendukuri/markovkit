@@ -1,0 +1,41 @@
+\begin{tikzpicture}[x=1cm,y=1cm,>=Stealth,font=\small]
+% \strip{x0}{yc}{cell width}{counts}{cells per aggregate}{cells}: one arrangement,
+% with dots for molecules and heavy outlines on aggregates.
+\def\sh{.17}\def\dotr{.055}
+\def\strip#1#2#3#4#5#6{%
+ \edef\stripl{#4}\foreach \c [count=\i from 0] in \stripl{%
+  \draw (#1+\i*#3,#2-\sh) rectangle ++(#3,2*\sh);
+  \ifnum\c=1 \fill (#1+\i*#3+.5*#3,#2) circle (\dotr);\fi
+  \ifnum\c=2 \fill (#1+\i*#3+.3*#3,#2) circle (\dotr)
+                   (#1+\i*#3+.7*#3,#2) circle (\dotr);\fi}
+ \pgfmathtruncatemacro\nag{#6/#5-1}%
+ \foreach \j in {0,...,\nag}
+  \draw[very thick] (#1+\j*#5*#3,#2-\sh) rectangle ++(#5*#3,2*\sh);}
+% (a) Restriction
+\node[anchor=west] at (-.1,1.25) {(a) Restriction};
+\strip{0}{.6}{.42}{2,0,0,0}{2}{4}
+\strip{0}{0}{.42}{1,1,0,0}{2}{4}
+\strip{0}{-.6}{.42}{0,2,0,0}{2}{4}
+\foreach \y in {.6,0,-.6}
+ \draw[->,thick] (1.8,\y)--(3.35,0);
+\node[font=\footnotesize] at (2.55,.6) {sum};
+\strip{3.45}{0}{.84}{2,0}{1}{2}
+\node[font=\footnotesize] at (4.29,-.55) {$(Rr)_j$};
+\node[font=\footnotesize,align=center] at (.84,-1.2)
+ {fine states with\\coarse counts $(2,0)$};
+% (b) Prolongation
+\begin{scope}[xshift=6.55cm]
+\node[anchor=west] at (-.1,1.25) {(b) Prolongation};
+\strip{0}{0}{.84}{2,0}{1}{2}
+\node[font=\footnotesize] at (.84,-.55) {$(e_c)_j$};
+\foreach \y/\w in {.6/\tfrac14,0/\tfrac12,-.6/\tfrac14}{
+ \draw[->,thick] (1.78,0)--(3.35,\y);
+ \node[font=\footnotesize,anchor=west] at (5.18,\y) {$\times\w$};}
+\node[font=\footnotesize] at (2.55,.6) {weight};
+\strip{3.45}{.6}{.42}{2,0,0,0}{2}{4}
+\strip{3.45}{0}{.42}{1,1,0,0}{2}{4}
+\strip{3.45}{-.6}{.42}{0,2,0,0}{2}{4}
+\node[font=\footnotesize,align=center] at (4.29,-1.2)
+ {add correction\\to each fine entry};
+\end{scope}
+\end{tikzpicture}

@@ -1,0 +1,18 @@
+{
+  "command": [
+    "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid",
+    "--cycles",
+    "2",
+    "--cap",
+    "80",
+    "--hierarchy",
+    "recursive",
+    "--cycles",
+    "2",
+    "--history",
+    "/Users/adityadendukuri/DiscStochSim-multigrid/paper/data/full_multigrid/history_schlogl_w.csv"
+  ],
+  "status": 0,
+  "executable_sha256": "a2dcfd58cb088aace766bde57919fc53fc3eb9bfd904aef55b9d0de59f739172",
+  "wall_seconds": 13.263400040974375
+}

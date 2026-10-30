@@ -1,0 +1,15 @@
+{
+  "command": [
+    "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid",
+    "--cycles",
+    "2",
+    "--tolerance",
+    "1e-12",
+    "--adaptive-fsp",
+    "--fsp-tolerance",
+    "nan"
+  ],
+  "executable_sha256": "6e448e5601213bd532cb1a9839c414df28d168df9f4506b3cdcf492d6c62c521",
+  "status": 1,
+  "wall_seconds": 0.010287208016961813
+}

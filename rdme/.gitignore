@@ -1,0 +1,10 @@
+# Keep recorded results despite MarkovKit's root CSV ignore rule.
+!paper/data/**/*.csv
+!paper/data/**/*.log
+# Generated build files and new output dumps.
+cpp/build*/
+__pycache__/
+*.pyc
+tmp/
+output/
+!paper/figures/.gitkeep

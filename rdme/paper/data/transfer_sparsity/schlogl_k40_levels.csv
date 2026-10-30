@@ -1,0 +1,3 @@
+level,fine_voxels,coarse_voxels,cap,fine_states,coarse_states,nnz,reflection
+0,4,2,40,135751,861,135751,0
+1,2,1,40,861,41,861,0

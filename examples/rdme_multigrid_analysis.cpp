@@ -1,7 +1,7 @@
+// smoothing and two-grid analysis of population multigrid on fixed-population sectors
 #include "core/types.hpp"
 #include "plot/plot.hpp"
-#include "rdme/rdme.hpp"
-#include "structures/graph/structured_grid.hpp"
+#include "markovkit.hpp"
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
@@ -11,6 +11,8 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+
+using namespace markovkit;
 
 namespace {
 
@@ -57,22 +59,21 @@ void normalize(num::vec<double> &x, num::view<const double> stationary) {
         value /= norm;
 }
 
-num::vec<double> stationary_distribution(const rdme::diffusion_state_space &space) {
-    const auto &layout = space.layout();
-    num::vec<double> stationary(space.size(), 0.0);
-    for (num::idx state = 0; state < space.size(); ++state) {
+// the multinomial stationary distribution of diffusion in a sector of equal voxels
+vec<real> stationary_distribution(const population_sector &space) {
+    const idx S = space.n_species();
+    vec<real> stationary(space.size(), 0.0);
+    for (idx i = 0; i < space.size(); ++i) {
         double log_probability = 0.0;
-        for (std::size_t species = 0; species < layout.species_count(); ++species) {
-            const int total = space.species_totals()[species];
-            log_probability +=
-                std::lgamma(static_cast<double>(total) + 1.0) -
-                static_cast<double>(total) * std::log(static_cast<double>(layout.voxel_count()));
-            for (std::size_t voxel = 0; voxel < layout.voxel_count(); ++voxel) {
-                log_probability -= std::lgamma(
-                    static_cast<double>(space[state][layout.index(voxel, species)]) + 1.0);
+        for (idx species = 0; species < S; ++species) {
+            const int total = space.totals()[species];
+            log_probability += std::lgamma(total + 1.0) -
+                               (total * std::log(static_cast<double>(space.n_voxels())));
+            for (idx voxel = 0; voxel < space.n_voxels(); ++voxel) {
+                log_probability -= std::lgamma(space[i][(voxel * S) + species] + 1.0);
             }
         }
-        stationary[state] = std::exp(log_probability);
+        stationary[i] = std::exp(log_probability);
     }
     double mass = 0.0;
     for (double value : stationary)
@@ -137,37 +138,33 @@ void run_case(const benchmark_case &problem) {
     dimensions.fill(problem.cells_per_axis);
     num::static_array<double, D> spacing{};
     spacing.fill(1.0 / static_cast<double>(problem.cells_per_axis));
-    num::structured_grid_graph<D> graph(dimensions, spacing);
-    rdme::voxel_domain domain(std::move(graph), num::array<double>{1.0});
-    const num::array<int> totals{problem.population};
+    const voxel_domain domain(grid<D>(dimensions, spacing), {1.0});
+    const array<int> totals{problem.population};
+    const real s = problem.shift;
+    using cycle = population_multigrid<D>;
+    const auto block = relaxation::aggregate_block;
 
-    rdme::population_multigrid<D> multigrid(domain, totals, problem.shift);
-    rdme::population_multigrid<D> block_multigrid(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 4,
-                                                  32, 1, 0,
-                                                  rdme::population_smoother::aggregate_block);
-    rdme::population_multigrid<D> block_wcycle(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 4,
-                                               32, 2, 0,
-                                               rdme::population_smoother::aggregate_block);
-    rdme::population_multigrid<D> wcycle(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 4, 32, 2);
-    rdme::population_multigrid<D> variable_vcycle(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 4,
-                                                  32, 1, 4);
-    rdme::population_multigrid<D> two_grid(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 1, 2);
-    rdme::population_multigrid<D> block_two_grid(domain, totals, problem.shift, 2, 2, 2.0 / 3.0, 1,
-                                                 2, 1, 0,
-                                                 rdme::population_smoother::aggregate_block);
-    if (!two_grid.has_coarse_level())
+    const cycle multigrid(domain, totals, s);
+    const cycle block_multigrid(domain, totals, s, {.smoother = block});
+    const cycle block_wcycle(domain, totals, s, {.coarse_cycles = 2, .smoother = block});
+    const cycle wcycle(domain, totals, s, {.coarse_cycles = 2});
+    const cycle variable_vcycle(domain, totals, s, {.sweep_growth = 4});
+    const cycle two_grid(domain, totals, s, {.coarsest_size = 1, .max_levels = 2});
+    const cycle block_two_grid(domain, totals, s,
+                               {.coarsest_size = 1, .max_levels = 2, .smoother = block});
+    if (!two_grid.coarse_level())
         throw std::logic_error("RDME two-grid analysis case has no coarse level");
 
-    const auto &generator = multigrid.fine_generator();
+    const generator &Q = multigrid.fine_generator();
     const auto &transfer = two_grid.transfer();
-    const num::vec<double> stationary = stationary_distribution(generator.state_space());
-    num::vec<double> system_image(generator.rows(), 0.0);
-    num::vec<double> work(generator.rows(), 0.0);
+    const vec<real> stationary = stationary_distribution(multigrid.space());
+    num::vec<double> system_image(Q.rows(), 0.0);
+    num::vec<double> work(Q.rows(), 0.0);
     num::vec<double> coarse(transfer.coarse_size(), 0.0);
-    num::vec<double> lifted(generator.rows(), 0.0);
+    num::vec<double> lifted(Q.rows(), 0.0);
     num::vec<double> coarse_residual(transfer.coarse_size(), 0.0);
     num::vec<double> coarse_correction(transfer.coarse_size(), 0.0);
-    num::vec<double> zero(generator.rows(), 0.0);
+    num::vec<double> zero(Q.rows(), 0.0);
     constexpr double omega = 2.0 / 3.0;
 
     const auto smooth = [&](const num::vec<double> &input, num::vec<double> &output, int sweeps) {
@@ -175,7 +172,7 @@ void run_case(const benchmark_case &problem) {
         for (int sweep = 0; sweep < sweeps; ++sweep) {
             multigrid.apply_system(output, system_image);
             for (num::idx state = 0; state < output.size(); ++state) {
-                const double diagonal = problem.shift + generator.exit_rates()[state];
+                const double diagonal = problem.shift + Q.exit_rates()[state];
                 work[state] = output[state] - omega * system_image[state] / diagonal;
             }
             std::swap(output, work);
@@ -187,15 +184,15 @@ void run_case(const benchmark_case &problem) {
     const auto no_projection = [](num::vec<double> &) {};
 
     const double smoothing_one = estimate_asymptotic_factor(
-        generator.rows(), stationary,
+        Q.rows(), stationary,
         [&](const num::vec<double> &input, num::vec<double> &output) { smooth(input, output, 1); }, high_pass,
         0x51a7ULL + problem.cells_per_axis * 31 + problem.population);
     const double smoothing_two = estimate_asymptotic_factor(
-        generator.rows(), stationary,
+        Q.rows(), stationary,
         [&](const num::vec<double> &input, num::vec<double> &output) { smooth(input, output, 2); }, high_pass,
         0x72b9ULL + problem.cells_per_axis * 31 + problem.population);
     const double block_smoothing = estimate_asymptotic_factor(
-        generator.rows(), stationary,
+        Q.rows(), stationary,
         [&](const num::vec<double> &input, num::vec<double> &output) {
             output = input;
             block_multigrid.relax(zero, output, 1);
@@ -206,7 +203,7 @@ void run_case(const benchmark_case &problem) {
         smooth(input, output, 2);
         two_grid.apply_system(output, system_image);
         transfer.restrict(system_image, coarse_residual);
-        two_grid.coarse_level()->apply_block(coarse_residual, coarse_correction);
+        two_grid.coarse_level()->cycle(coarse_residual, coarse_correction);
         transfer.prolong(coarse_correction, lifted);
         for (num::idx state = 0; state < output.size(); ++state)
             output[state] -= lifted[state];
@@ -214,7 +211,7 @@ void run_case(const benchmark_case &problem) {
         smooth(work, output, 2);
     };
     const double two_grid_factor =
-        estimate_asymptotic_factor(generator.rows(), stationary, apply_two_grid, no_projection,
+        estimate_asymptotic_factor(Q.rows(), stationary, apply_two_grid, no_projection,
                                    0x93c1ULL + problem.cells_per_axis * 31 + problem.population);
 
     const auto apply_block_two_grid = [&](const num::vec<double> &input, num::vec<double> &output) {
@@ -224,7 +221,7 @@ void run_case(const benchmark_case &problem) {
             output[state] = input[state] - work[state];
     };
     const double block_two_grid_factor = estimate_asymptotic_factor(
-        generator.rows(), stationary, apply_block_two_grid, no_projection,
+        Q.rows(), stationary, apply_block_two_grid, no_projection,
         0xa4d2ULL + problem.cells_per_axis * 31 + problem.population);
 
     const auto apply_vcycle = [&](const num::vec<double> &input, num::vec<double> &output) {
@@ -234,7 +231,7 @@ void run_case(const benchmark_case &problem) {
             output[state] = input[state] - work[state];
     };
     const double vcycle_factor =
-        estimate_asymptotic_factor(generator.rows(), stationary, apply_vcycle, no_projection,
+        estimate_asymptotic_factor(Q.rows(), stationary, apply_vcycle, no_projection,
                                    0xb4d3ULL + problem.cells_per_axis * 31 + problem.population);
 
     const auto apply_block_vcycle = [&](const num::vec<double> &input, num::vec<double> &output) {
@@ -244,7 +241,7 @@ void run_case(const benchmark_case &problem) {
             output[state] = input[state] - work[state];
     };
     const double block_vcycle_factor =
-        estimate_asymptotic_factor(generator.rows(), stationary, apply_block_vcycle, no_projection,
+        estimate_asymptotic_factor(Q.rows(), stationary, apply_block_vcycle, no_projection,
                                    0xc5e6ULL + problem.cells_per_axis * 31 + problem.population);
 
     const auto apply_block_wcycle = [&](const num::vec<double> &input, num::vec<double> &output) {
@@ -254,7 +251,7 @@ void run_case(const benchmark_case &problem) {
             output[state] = input[state] - work[state];
     };
     const double block_wcycle_factor =
-        estimate_asymptotic_factor(generator.rows(), stationary, apply_block_wcycle, no_projection,
+        estimate_asymptotic_factor(Q.rows(), stationary, apply_block_wcycle, no_projection,
                                    0xd6f8ULL + problem.cells_per_axis * 31 + problem.population);
 
     const auto apply_wcycle = [&](const num::vec<double> &input, num::vec<double> &output) {
@@ -264,7 +261,7 @@ void run_case(const benchmark_case &problem) {
             output[state] = input[state] - work[state];
     };
     const double wcycle_factor =
-        estimate_asymptotic_factor(generator.rows(), stationary, apply_wcycle, no_projection,
+        estimate_asymptotic_factor(Q.rows(), stationary, apply_wcycle, no_projection,
                                    0xd5e7ULL + problem.cells_per_axis * 31 + problem.population);
 
     const auto apply_variable_vcycle = [&](const num::vec<double> &input, num::vec<double> &output) {
@@ -274,12 +271,12 @@ void run_case(const benchmark_case &problem) {
             output[state] = input[state] - work[state];
     };
     const double variable_vcycle_factor = estimate_asymptotic_factor(
-        generator.rows(), stationary, apply_variable_vcycle, no_projection,
+        Q.rows(), stationary, apply_variable_vcycle, no_projection,
         0xf719ULL + problem.cells_per_axis * 31 + problem.population);
 
     result result{problem,
-                  generator.domain().n_voxels(),
-                  generator.rows(),
+                  multigrid.space().n_voxels(),
+                  Q.rows(),
                   multigrid.n_levels(),
                   multigrid.grid_complexity(),
                   multigrid.operator_complexity(),

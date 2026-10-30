@@ -1,0 +1,2 @@
+# Preserve recorded CSV bytes, including csv.writer CRLF line endings.
+paper/data/** -text whitespace=cr-at-eol

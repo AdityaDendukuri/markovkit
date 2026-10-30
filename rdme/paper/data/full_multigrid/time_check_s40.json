@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid",
+    "--cycles",
+    "2",
+    "--cells",
+    "2",
+    "--cap",
+    "40",
+    "--shift",
+    "0.8",
+    "--steps",
+    "40",
+    "--integrator",
+    "cn",
+    "--state-output",
+    "/Users/adityadendukuri/DiscStochSim-multigrid/paper/data/full_multigrid/time_check_s40_state.csv"
+  ],
+  "status": 0,
+  "executable_sha256": "a2dcfd58cb088aace766bde57919fc53fc3eb9bfd904aef55b9d0de59f739172",
+  "wall_seconds": 0.0737760000047274
+}

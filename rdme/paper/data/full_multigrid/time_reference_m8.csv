@@ -1,0 +1,2 @@
+states,time,chunks,matvecs,poisson_tail_bound,mass,solve_s
+861,100,2622,209760,2.36113883084151e-48,0.60601965532397,0.686215791

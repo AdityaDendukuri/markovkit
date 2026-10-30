@@ -1,0 +1,712 @@
+Start testing: Oct 22 14:40 PDT
+----------------------------------------------------------
+1/25 Testing: rdme_full_multigrid_smoke
+1/25 Test: rdme_full_multigrid_smoke
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "4" "--cap" "12" "--initial" "8" "--check"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_full_multigrid_smoke" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check cells=4 RP=5.55112e-16 RAP=5.59402e-16
+check cells=2 RP=2.22045e-16 RAP=2.72005e-15
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=2.56545e-12 residual_bound=6.348e-10
+1,4,12,1820,1,0.05,mg,gs,2,1,1,34,6.3480008549e-10,1,0.0004075,0.003392542,0.560530251831,0,1.03256761618e-09,364040,9060352,standard,0,0,0,reverse-pre,1e-08,1820
+<end of output>
+Test time =   0.18 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_full_multigrid_smoke" end time: Oct 22 14:40 PDT
+"rdme_full_multigrid_smoke" time elapsed: 00:00:00
+----------------------------------------------------------
+
+2/25 Testing: rdme_full_multigrid_2d
+2/25 Test: rdme_full_multigrid_2d
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "2" "--dimension" "2" "--cap" "8" "--check" "--cycles" "2"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_full_multigrid_2d" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check cells=2 RP=1.11022e-15 RAP=5.88418e-15
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=4.86658e-12 residual_bound=8.73003e-10
+2,2,8,495,1,0.05,mg,gs,2,2,1,25,8.73002750186e-10,1,0.000118917,0.000625166,0.1476591207,0,5.57425249846e-07,97076,3604480,standard,0,0,0,reverse-pre,1e-08,495
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_full_multigrid_2d" end time: Oct 22 14:40 PDT
+"rdme_full_multigrid_2d" time elapsed: 00:00:00
+----------------------------------------------------------
+
+3/25 Testing: rdme_full_multigrid_3d
+3/25 Test: rdme_full_multigrid_3d
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "2" "--dimension" "3" "--cap" "4" "--initial" "2" "--check" "--cycles" "2"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_full_multigrid_3d" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check cells=2 RP=1.27676e-15 RAP=3.53884e-15
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=2.61727e-12 residual_bound=4.75633e-10
+3,2,4,495,1,0.05,mg,gs,2,2,1,20,4.75633231307e-10,1,0.000194334,0.000604917,0.268003009105,0,1.27236582625e-05,112444,3899392,standard,0,0,0,reverse-pre,1e-08,495
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_full_multigrid_3d" end time: Oct 22 14:40 PDT
+"rdme_full_multigrid_3d" time elapsed: 00:00:00
+----------------------------------------------------------
+
+4/25 Testing: rdme_full_multigrid_population_block
+4/25 Test: rdme_full_multigrid_population_block
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "4" "--cap" "8" "--initial" "4" "--smoother" "block-ilu" "--sweeps" "1" "--cycles" "2" "--check"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_full_multigrid_population_block" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check structured_ilu relative_update_error=9.99201e-16
+check cells=4 RP=2.22045e-16 RAP=4.59933e-16
+check structured_ilu relative_update_error=2.44249e-15
+check cells=2 RP=2.22045e-16 RAP=2.72005e-15
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=3.43347e-12 residual_bound=8.06586e-10
+1,4,8,495,1,0.05,mg,block-ilu,1,2,1,15,8.06586155677e-10,1,0.000128459,0.000429333,0.501473886114,0,3.87475308137e-07,105546,3604480,standard,0,0,0,reverse-pre,1e-08,495
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_full_multigrid_population_block" end time: Oct 22 14:40 PDT
+"rdme_full_multigrid_population_block" time elapsed: 00:00:00
+----------------------------------------------------------
+
+5/25 Testing: rdme_reflection_fsp
+5/25 Test: rdme_reflection_fsp
+Command: "/opt/homebrew/Frameworks/Python.framework/Versions/3.14/bin/python3.14" "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/../paper/scripts/check_reflection_fsp.py" "--executable" "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--output-dir" "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/Testing/reflection_fsp"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_reflection_fsp" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+{
+  "schlogl": {
+    "joint_l1_difference": 1.509593104527603e-13,
+    "full_states": 1001,
+    "stored_states": 511
+  },
+  "two_voxels": {
+    "joint_l1_difference": 4.0839657884872053e-16,
+    "full_states": 91,
+    "stored_states": 49
+  },
+  "2d": {
+    "joint_l1_difference": 2.078104591463553e-13,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "2d_levels": {
+    "joint_l1_difference": 8.988049562431988e-14,
+    "full_states": 153,
+    "stored_states": 81
+  },
+  "3d": {
+    "joint_l1_difference": 2.2251130335006772e-13,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "zero_population": {
+    "joint_l1_difference": 0.0,
+    "full_states": 1,
+    "stored_states": 1
+  },
+  "zero_diffusion": {
+    "joint_l1_difference": 8.983283138995675e-18,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "direct": {
+    "joint_l1_difference": 1.6690040324005864e-13,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "v": {
+    "joint_l1_difference": 1.1071996335612076e-13,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "k": {
+    "joint_l1_difference": 1.1058506603789491e-13,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "cn": {
+    "joint_l1_difference": 1.4655888080914635e-13,
+    "full_states": 495,
+    "stored_states": 255
+  },
+  "adaptive": {
+    "joint_l1_difference": 8.313346991201778e-14,
+    "full_states": 1820,
+    "stored_states": 924
+  },
+  "adaptive_nonlinear": {
+    "joint_l1_difference": 9.241584754225935e-16,
+    "full_states": 171,
+    "stored_states": 90
+  }
+}
+<end of output>
+Test time =   0.42 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_reflection_fsp" end time: Oct 22 14:40 PDT
+"rdme_reflection_fsp" time elapsed: 00:00:00
+----------------------------------------------------------
+
+6/25 Testing: rdme_structured_population_blocks
+6/25 Test: rdme_structured_population_blocks
+Command: "/opt/homebrew/Frameworks/Python.framework/Versions/3.14/bin/python3.14" "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/../paper/scripts/check_structured_population_blocks.py" "--executable" "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--output-dir" "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/Testing/structured_population_blocks"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_structured_population_blocks" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+{
+  "schlogl": {
+    "joint_l1_difference": 1.3290494385412762e-16,
+    "states": 1820
+  },
+  "2d": {
+    "joint_l1_difference": 8.472811386611938e-17,
+    "states": 495
+  },
+  "3d": {
+    "joint_l1_difference": 7.946354891371493e-17,
+    "states": 495
+  },
+  "zero_diffusion": {
+    "joint_l1_difference": 1.6285118309637732e-24,
+    "states": 495
+  },
+  "linear": {
+    "joint_l1_difference": 3.0451173266971e-16,
+    "states": 969
+  },
+  "direct": {
+    "joint_l1_difference": 1.6633249099113434e-16,
+    "states": 495
+  },
+  "v": {
+    "joint_l1_difference": 7.750364288676343e-17,
+    "states": 495
+  },
+  "k": {
+    "joint_l1_difference": 2.0100572678434624e-16,
+    "states": 495
+  },
+  "gmres": {
+    "joint_l1_difference": 1.4357985625233109e-15,
+    "states": 495
+  },
+  "cn": {
+    "joint_l1_difference": 2.486859616381064e-16,
+    "states": 495
+  },
+  "adaptive": {
+    "joint_l1_difference": 1.6010483391770522e-16,
+    "states": 1820
+  }
+}
+<end of output>
+Test time =   0.55 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_structured_population_blocks" end time: Oct 22 14:40 PDT
+"rdme_structured_population_blocks" time elapsed: 00:00:00
+----------------------------------------------------------
+
+7/25 Testing: schlogl_spatial_front_validation
+7/25 Test: schlogl_spatial_front_validation
+Command: "/opt/homebrew/Frameworks/Python.framework/Versions/3.14/bin/python3.14" "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/../paper/scripts/check_spatial_schlogl_front.py" "--executable" "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/schlogl_spatial_front"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"schlogl_spatial_front_validation" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+{
+  "diffusion": "binomial means and high-state probabilities agree within sampling error; mass conserved",
+  "frozen": "initial state preserved",
+  "reaction": "independent uniformization CME agrees within sampling error",
+  "cme_mean": 1.9231229071334912,
+  "cme_high_probability": 0.02713547242808366
+}
+<end of output>
+Test time =   0.42 sec
+----------------------------------------------------------
+Test Passed.
+"schlogl_spatial_front_validation" end time: Oct 22 14:40 PDT
+"schlogl_spatial_front_validation" time elapsed: 00:00:00
+----------------------------------------------------------
+
+8/25 Testing: rdme_adaptive_population_fsp
+8/25 Test: rdme_adaptive_population_fsp
+Command: "/opt/homebrew/Frameworks/Python.framework/Versions/3.14/bin/python3.14" "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/../paper/scripts/check_adaptive_population_fsp.py" "--executable" "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--output-dir" "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/Testing/adaptive_population_fsp"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_adaptive_population_fsp" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+{
+  "linear_loose": {
+    "final_cap": 8,
+    "peak_states": 495,
+    "reference_states": 46376,
+    "expansions": 2,
+    "final_missing_mass": 0.00042255223301457256,
+    "reference_l1": 0.00042255223288885434,
+    "total_seconds": 0.004022581
+  },
+  "linear_mid": {
+    "final_cap": 12,
+    "peak_states": 1820,
+    "reference_states": 46376,
+    "expansions": 3,
+    "final_missing_mass": 8.34153363937773e-07,
+    "reference_l1": 8.341532395129328e-07,
+    "total_seconds": 0.014045373
+  },
+  "linear_tight": {
+    "final_cap": 17,
+    "peak_states": 5985,
+    "reference_states": 46376,
+    "expansions": 4,
+    "final_missing_mass": 4.866155134397587e-08,
+    "reference_l1": 4.8661435638277645e-08,
+    "total_seconds": 0.031585665
+  },
+  "schlogl": {
+    "final_cap": 17,
+    "states": 171,
+    "reference_l1": 2.0631474519564776e-08
+  },
+  "time_refinement": {
+    "dt_point1_l1": 0.03623020818463083,
+    "dt_point05_l1": 0.018457824123956166
+  },
+  "reuse_gs": {
+    "joint_l1_difference": 0.0,
+    "attempts": 13
+  },
+  "reuse_block_ilu": {
+    "joint_l1_difference": 0.0,
+    "attempts": 13
+  },
+  "reuse_block_exact": {
+    "joint_l1_difference": 0.0,
+    "attempts": 13
+  },
+  "reuse_bottom": {
+    "joint_l1_difference": 0.0,
+    "attempts": 13
+  },
+  "reuse_2d": {
+    "joint_l1_difference": 0.0,
+    "attempts": 13
+  },
+  "reuse_direct": {
+    "joint_l1_difference": 0.0,
+    "attempts": 13
+  },
+  "reuse_k": {
+    "joint_l1_difference": 0.0,
+    "attempts": 13
+  }
+}
+<end of output>
+Test time =   1.53 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_adaptive_population_fsp" end time: Oct 22 14:40 PDT
+"rdme_adaptive_population_fsp" time elapsed: 00:00:01
+----------------------------------------------------------
+
+9/25 Testing: graph_multigrid_fsp_smoke
+9/25 Test: graph_multigrid_fsp_smoke
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/graph_multigrid_fsp" "8" "16" "2"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"graph_multigrid_fsp_smoke" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+Graph Multigrid FSP for separated X + Y -> 0
+voxels=8 particles/species=2 states=1361 dt=16 steps=1 graph=chain reaction=annihilation fill_cap=64
+assembly seconds:          0.000730917
+plain GMRES:               145 iterations, 0.00223779 s
+ILU(0)-GMRES:              23 iterations, setup 4.2916e-05 s, solve 0.000522833 s
+hard V-cycle:              15 iterations, setup 0.00104762 s, solve 0.000635875 s, sparse storage 0.224991 MiB
+smooth V-cycle:            11 iterations, setup 0.00243538 s, solve 0.000690042 s, sparse storage 0.460983 MiB
+controlled smooth:         11 iterations, setup 0.00207204 s, solve 0.000627917 s, sparse storage 0.377243 MiB
+sector-aware V-cycle:      11 iterations (cap 64), setup 0.00230217 s, solve 0.000693625 s, sparse storage 0.377243 MiB
+sector setup breakdown:    transfer 0.000835583 s, Galerkin 0.00124433 s, coarse factor 1e-06 s
+sector-aware true residual:8.008e-11
+probability mass:           1.000e+00
+minimum probability:        1.162e-06
+annihilated probability:    3.244e-01
+sector-aware/direct L1:    5.709e-11
+direct factor+solve:        7.044e-03 s
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"graph_multigrid_fsp_smoke" end time: Oct 22 14:40 PDT
+"graph_multigrid_fsp_smoke" time elapsed: 00:00:00
+----------------------------------------------------------
+
+10/25 Testing: graph_multigrid_fsp_grid_direct
+10/25 Test: graph_multigrid_fsp_grid_direct
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/graph_multigrid_fsp" "9" "16" "2" "1" "grid" "64" "annihilation"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"graph_multigrid_fsp_grid_direct" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+Graph Multigrid FSP for separated X + Y -> 0
+voxels=9 particles/species=2 states=2107 dt=16 steps=1 graph=grid reaction=annihilation fill_cap=64
+assembly seconds:          0.00145937
+plain GMRES:               78 iterations, 0.00183258 s
+ILU(0)-GMRES:              18 iterations, setup 0.00016875 s, solve 0.000598166 s
+hard V-cycle:              15 iterations, setup 0.00194921 s, solve 0.00124292 s, sparse storage 0.482407 MiB
+smooth V-cycle:            13 iterations, setup 0.0274221 s, solve 0.00377379 s, sparse storage 2.75656 MiB
+controlled smooth:         13 iterations, setup 0.00867825 s, solve 0.00215575 s, sparse storage 1.19865 MiB
+sector-aware V-cycle:      13 iterations (cap 64), setup 0.00816667 s, solve 0.00209858 s, sparse storage 1.19865 MiB
+sector setup breakdown:    transfer 0.00284104 s, Galerkin 0.00489792 s, coarse factor 3.542e-06 s
+sector-aware true residual:7.841e-11
+probability mass:           1.000e+00
+minimum probability:        7.473e-06
+annihilated probability:    4.788e-01
+sector-aware/direct L1:    6.052e-11
+direct factor+solve:        8.097e-02 s
+<end of output>
+Test time =   0.15 sec
+----------------------------------------------------------
+Test Passed.
+"graph_multigrid_fsp_grid_direct" end time: Oct 22 14:40 PDT
+"graph_multigrid_fsp_grid_direct" time elapsed: 00:00:00
+----------------------------------------------------------
+
+11/25 Testing: graph_multigrid_fsp_autocatalytic_direct
+11/25 Test: graph_multigrid_fsp_autocatalytic_direct
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/graph_multigrid_fsp" "4" "16" "2" "1" "grid" "64" "autocatalytic"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"graph_multigrid_fsp_autocatalytic_direct" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+Graph Multigrid FSP for separated X + Y -> 2Y
+voxels=4 particles/species=2 states=215 dt=16 steps=1 graph=grid reaction=autocatalytic fill_cap=64
+assembly seconds:          0.000118792
+plain GMRES:               37 iterations, 8.6083e-05 s
+ILU(0)-GMRES:              17 iterations, setup 1.4792e-05 s, solve 6.0208e-05 s
+hard V-cycle:              12 iterations, setup 0.000218375 s, solve 9.4875e-05 s, sparse storage 0.0351105 MiB
+smooth V-cycle:            11 iterations, setup 0.000378791 s, solve 0.000113834 s, sparse storage 0.0609589 MiB
+controlled smooth:         12 iterations, setup 0.00041625 s, solve 0.00011075 s, sparse storage 0.0540619 MiB
+sector-aware V-cycle:      13 iterations (cap 8), setup 0.000234625 s, solve 9.7458e-05 s, sparse storage 0.0360718 MiB
+sector setup breakdown:    transfer 0.000108833 s, Galerkin 7.9917e-05 s, coarse factor 4.17e-07 s
+sector-aware true residual:1.805e-11
+probability mass:           1.000e+00
+minimum probability:        1.354e-04
+fully converted probability: 8.310e-01
+sector-aware/direct L1:    6.419e-12
+direct factor+solve:        2.295e-04 s
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"graph_multigrid_fsp_autocatalytic_direct" end time: Oct 22 14:40 PDT
+"graph_multigrid_fsp_autocatalytic_direct" time elapsed: 00:00:00
+----------------------------------------------------------
+
+12/25 Testing: graph_multigrid_fsp_binding_direct
+12/25 Test: graph_multigrid_fsp_binding_direct
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/graph_multigrid_fsp" "9" "16" "2" "1" "grid" "64" "binding"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"graph_multigrid_fsp_binding_direct" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+Graph Multigrid FSP for separated X + Y <-> C
+voxels=9 particles/species=2 states=2799 dt=16 steps=1 graph=grid reaction=binding fill_cap=64
+assembly seconds:          0.00275017
+plain GMRES:               51 iterations, 0.00176258 s
+ILU(0)-GMRES:              18 iterations, setup 0.000247 s, solve 0.000831917 s
+hard V-cycle:              16 iterations, setup 0.00295946 s, solve 0.00170871 s, sparse storage 0.646042 MiB
+smooth V-cycle:            15 iterations, setup 0.0373999 s, solve 0.00625721 s, sparse storage 4.12154 MiB
+controlled smooth:         15 iterations, setup 0.0142452 s, solve 0.00388896 s, sparse storage 2.05605 MiB
+sector-aware V-cycle:      16 iterations (cap 8), setup 0.00370321 s, solve 0.00171767 s, sparse storage 0.700821 MiB
+sector setup breakdown:    transfer 0.00136262 s, Galerkin 0.00162596 s, coarse factor 7.09e-07 s
+sector-aware true residual:3.117e-11
+probability mass:           1.000e+00
+minimum probability:        8.606e-05
+fully bound probability:     1.439e-02
+sector-aware/direct L1:    2.902e-11
+direct factor+solve:        2.637e-01 s
+<end of output>
+Test time =   0.35 sec
+----------------------------------------------------------
+Test Passed.
+"graph_multigrid_fsp_binding_direct" end time: Oct 22 14:40 PDT
+"graph_multigrid_fsp_binding_direct" time elapsed: 00:00:00
+----------------------------------------------------------
+
+13/25 Testing: schlogl_multigrid_fsp_smoke
+13/25 Test: schlogl_multigrid_fsp_smoke
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/schlogl_multigrid_fsp" "--quick"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"schlogl_multigrid_fsp_smoke" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+dimension,cells_per_axis,voxels,max_population,states,sectors,diffusivity,reaction_scale,shift,levels,method,generator_setup_ms,preconditioner_setup_ms,solve_ms,iterations,residual,converged,relative_solution_difference,boundary_flux_transform,mass_balance_error
+1,4,4,10,1001,11,1,0.005,0.5,0,plain,1.211125,0,6.617,313,8.999008393e-10,1,0,0.3752588727,2.785438546e-11
+1,4,4,10,1001,11,1,0.005,0.5,0,jacobi,1.211125,0.001042,2.379125,123,9.206568154e-10,1,4.046064451e-09,0.3752588799,1.440577369e-08
+1,4,4,10,1001,11,1,0.005,0.5,3,sector_point_mg,1.211125,0.535292,1.102292,27,3.724307764e-10,1,2.235104522e-09,0.3752588743,1.972713104e-10
+1,4,4,10,1001,11,1,0.005,0.5,3,reaction_aware_sector_mg,1.211125,0.425542,1.027042,24,6.6325384e-10,1,1.92757179e-09,0.3752588728,1.824558282e-09
+1,4,4,10,1001,11,1,0.005,0.5,3,spatial_reaction_mg,1.211125,0.554167,0.935458,11,1.679716555e-10,1,2.231402976e-09,0.3752588744,1.532352023e-11
+1,4,4,10,1001,11,1,0.005,0.5,3,spatial_reaction_mg_coarse_first,1.211125,0.50175,1.067083,19,5.653502469e-10,1,2.276829824e-09,0.3752588744,1.729749677e-11
+1,4,4,10,1001,11,1,0.005,0.5,3,spatial_reaction_mg_sector_first,1.211125,0.4975,0.904417,19,5.548118887e-10,1,2.261074458e-09,0.3752588744,3.922939751e-11
+1,4,4,10,1001,11,1,0.005,0.5,3,sector_block_mg,1.211125,2.340333,2.289334,21,5.745215433e-10,1,2.30963294e-09,0.3752588749,9.483023256e-10
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"schlogl_multigrid_fsp_smoke" end time: Oct 22 14:40 PDT
+"schlogl_multigrid_fsp_smoke" time elapsed: 00:00:00
+----------------------------------------------------------
+
+14/25 Testing: rdme_full_multigrid_pair_chain
+14/25 Test: rdme_full_multigrid_pair_chain
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "4" "--cap" "8" "--initial" "4" "--smoother" "chain" "--sweeps" "1" "--cycles" "2" "--check"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_full_multigrid_pair_chain" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check cells=4 RP=2.22045e-16 RAP=4.59933e-16
+check cells=2 RP=2.22045e-16 RAP=2.72005e-15
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=1.25045e-12 residual_bound=2.72126e-10
+1,4,8,495,1,0.05,mg,chain,1,2,1,13,2.72126467011e-10,1,0.000186708,0.000489708,0.501473886114,0,3.8747530815e-07,136106,3522560,standard,0,0,0,reverse-pre,1e-08,495
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_full_multigrid_pair_chain" end time: Oct 22 14:40 PDT
+"rdme_full_multigrid_pair_chain" time elapsed: 00:00:00
+----------------------------------------------------------
+
+15/25 Testing: rdme_full_multigrid_pair_chain_2d
+15/25 Test: rdme_full_multigrid_pair_chain_2d
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "4" "--dimension" "2" "--cap" "4" "--initial" "2" "--linear" "1" "--shift" ".5" "--smoother" "chain" "--sweeps" "1" "--cycles" "2" "--check"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_full_multigrid_pair_chain_2d" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check cells=4 RP=1.9984e-15 RAP=3.95239e-16
+check cells=2 RP=2.22045e-16 RAP=7.27021e-16
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=2.46782e-11 residual_bound=6.83934e-10
+2,4,4,4845,1,0.5,mg,chain,1,2,1,11,6.83933992893e-10,1,0.004718084,0.016458417,0.821284517538,0,6.43566021011e-07,2547480,91996160,standard,0,0,0,reverse-pre,1e-08,4845
+<end of output>
+Test time =   3.47 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_full_multigrid_pair_chain_2d" end time: Oct 22 14:40 PDT
+"rdme_full_multigrid_pair_chain_2d" time elapsed: 00:00:03
+----------------------------------------------------------
+
+16/25 Testing: rdme_full_multigrid_graph_neighborhood
+16/25 Test: rdme_full_multigrid_graph_neighborhood
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "4" "--cap" "8" "--initial" "4" "--smoother" "overlap" "--sweeps" "1" "--cycles" "2" "--check"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_full_multigrid_graph_neighborhood" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check cells=4 RP=2.22045e-16 RAP=4.59933e-16
+check cells=2 RP=2.22045e-16 RAP=2.72005e-15
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=2.12199e-12 residual_bound=4.46157e-10
+1,4,8,495,1,0.05,mg,overlap,1,2,1,13,4.46156685227e-10,1,0.000604625,0.000957708,0.501473886115,0,3.87475308153e-07,193498,3751936,standard,0,0,0,reverse-pre,1e-08,495
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_full_multigrid_graph_neighborhood" end time: Oct 22 14:40 PDT
+"rdme_full_multigrid_graph_neighborhood" time elapsed: 00:00:00
+----------------------------------------------------------
+
+17/25 Testing: rdme_full_multigrid_overlap_2d
+17/25 Test: rdme_full_multigrid_overlap_2d
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "4" "--dimension" "2" "--cap" "4" "--initial" "2" "--linear" "1" "--shift" ".5" "--smoother" "overlap" "--sweeps" "1" "--cycles" "2" "--check"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_full_multigrid_overlap_2d" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check cells=4 RP=1.9984e-15 RAP=3.95239e-16
+check cells=2 RP=2.22045e-16 RAP=7.27021e-16
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=7.05024e-12 residual_bound=1.67745e-10
+2,4,4,4845,1,0.5,mg,overlap,1,2,1,13,1.67745391332e-10,1,0.015441709,0.02441425,0.821284517528,0,6.43566020977e-07,3580760,93437952,standard,0,0,0,reverse-pre,1e-08,4845
+<end of output>
+Test time =   3.44 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_full_multigrid_overlap_2d" end time: Oct 22 14:40 PDT
+"rdme_full_multigrid_overlap_2d" time elapsed: 00:00:03
+----------------------------------------------------------
+
+18/25 Testing: cascading_smoother_algebra
+18/25 Test: cascading_smoother_algebra
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/test_cascading_smoother"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"cascading_smoother_algebra" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+cascade: dense fit, scaling, application order, Poisson weights, and row cap passed
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"cascading_smoother_algebra" end time: Oct 22 14:40 PDT
+"cascading_smoother_algebra" time elapsed: 00:00:00
+----------------------------------------------------------
+
+19/25 Testing: rdme_cascade_linear
+19/25 Test: rdme_cascade_linear
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "8" "--cap" "3" "--initial" "2" "--linear" "1" "--shift" ".5" "--smoother" "cascade" "--cascade-depth" "2" "--sweeps" "1" "--cycles" "2" "--check"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_cascade_linear" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check cells=8 RP=2.22045e-16 RAP=1.31249e-16
+check cells=4 RP=0 RAP=2.12221e-16
+check cells=2 RP=0 RAP=4.17399e-16
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=2.78249e-11 residual_bound=8.63601e-10
+1,8,3,165,1,0.5,mg,cascade,1,2,1,26,8.63601025706e-10,1,0.000183126,0.00022125,0.622707423581,0,0.000161561356317,37556,2818048,standard,2,0,0.000107249,reverse-pre,1e-08,165
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_cascade_linear" end time: Oct 22 14:40 PDT
+"rdme_cascade_linear" time elapsed: 00:00:00
+----------------------------------------------------------
+
+20/25 Testing: rdme_cascade_schlogl
+20/25 Test: rdme_cascade_schlogl
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "4" "--cap" "12" "--initial" "8" "--smoother" "cascade" "--cascade-depth" "3" "--sweeps" "1" "--cycles" "2" "--check"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_cascade_schlogl" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check cells=4 RP=5.55112e-16 RAP=5.59402e-16
+check cells=2 RP=2.22045e-16 RAP=2.72005e-15
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=1.49057e-12 residual_bound=8.46853e-10
+1,4,12,1820,1,0.05,mg,cascade,1,2,1,33,8.46852797782e-10,1,0.004530458,0.003447667,0.56053025183,0,1.03256761616e-09,409904,12271616,standard,3,0,0.004162791,reverse-pre,1e-08,1820
+<end of output>
+Test time =   0.04 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_cascade_schlogl" end time: Oct 22 14:40 PDT
+"rdme_cascade_schlogl" time elapsed: 00:00:00
+----------------------------------------------------------
+
+21/25 Testing: rdme_cascade_truncated
+21/25 Test: rdme_cascade_truncated
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "8" "--cap" "3" "--initial" "2" "--linear" "1" "--shift" ".5" "--smoother" "cascade" "--cascade-depth" "3" "--cascade-row-cap" "8" "--sweeps" "1" "--cycles" "2" "--cycle-type" "k" "--check"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_cascade_truncated" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check cells=8 RP=2.22045e-16 RAP=1.31249e-16
+check cells=4 RP=0 RAP=2.12221e-16
+check cells=2 RP=0 RAP=4.17399e-16
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=1.58242e-11 residual_bound=4.24906e-10
+1,8,3,165,1,0.5,mg,cascade,1,2,1,24,4.24906314994e-10,1,0.000387042,0.000202375,0.622707423581,0,0.000161561356336,41036,2899968,k,3,8,0.000316625,reverse-pre,1e-08,165
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_cascade_truncated" end time: Oct 22 14:40 PDT
+"rdme_cascade_truncated" time elapsed: 00:00:00
+----------------------------------------------------------
+
+22/25 Testing: block_cascading_smoother_algebra
+22/25 Test: block_cascading_smoother_algebra
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/test_block_cascading_smoother"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"block_cascading_smoother_algebra" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+block cascade: least squares, scaling, norms, singleton equivalence, transpose order, and rank deficiency passed
+<end of output>
+Test time =   0.01 sec
+----------------------------------------------------------
+Test Passed.
+"block_cascading_smoother_algebra" end time: Oct 22 14:40 PDT
+"block_cascading_smoother_algebra" time elapsed: 00:00:00
+----------------------------------------------------------
+
+23/25 Testing: rdme_block_cascade_linear
+23/25 Test: rdme_block_cascade_linear
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "8" "--cap" "3" "--initial" "2" "--linear" "1" "--shift" ".5" "--smoother" "block-cascade" "--cascade-depth" "2" "--cascade-order" "reverse-pre" "--sweeps" "1" "--cycles" "2" "--cycle-type" "k" "--check"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_block_cascade_linear" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check cells=8 RP=2.22045e-16 RAP=1.31249e-16
+check cells=4 RP=0 RAP=2.12221e-16
+check cells=2 RP=0 RAP=4.17399e-16
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=3.12085e-10 residual_bound=4.9319e-10
+1,8,3,165,1,0.5,mg,block-cascade,1,2,1,12,4.93189644126e-10,1,0.01913775,0.000250791,0.622707423893,0,0.000161561356461,297044,7667712,k,2,0,0.019043291,reverse-pre,1e-08,165
+<end of output>
+Test time =   0.03 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_block_cascade_linear" end time: Oct 22 14:40 PDT
+"rdme_block_cascade_linear" time elapsed: 00:00:00
+----------------------------------------------------------
+
+24/25 Testing: rdme_block_cascade_schlogl
+24/25 Test: rdme_block_cascade_schlogl
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "4" "--cap" "8" "--initial" "4" "--smoother" "block-cascade" "--cascade-depth" "2" "--sweeps" "1" "--cycles" "2" "--check"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_block_cascade_schlogl" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check cells=4 RP=2.22045e-16 RAP=4.59933e-16
+check cells=2 RP=2.22045e-16 RAP=2.72005e-15
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=1.42986e-13 residual_bound=2.85319e-12
+1,4,8,495,1,0.05,mg,block-cascade,1,2,1,4,2.85319414071e-12,1,0.097056041,0.0002695,0.501473886114,0,3.87475308157e-07,957106,19054592,standard,2,0,0.09693325,forward,1e-08,495
+<end of output>
+Test time =   0.11 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_block_cascade_schlogl" end time: Oct 22 14:40 PDT
+"rdme_block_cascade_schlogl" time elapsed: 00:00:00
+----------------------------------------------------------
+
+25/25 Testing: rdme_block_cascade_forward
+25/25 Test: rdme_block_cascade_forward
+Command: "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid" "--cells" "4" "--cap" "8" "--initial" "4" "--smoother" "block-cascade" "--cascade-depth" "2" "--cascade-order" "forward" "--sweeps" "1" "--cycles" "2" "--cycle-type" "k" "--check"
+Directory: /Users/adityadendukuri/DiscStochSim-multigrid/cpp/build
+"rdme_block_cascade_forward" start time: Oct 22 14:40 PDT
+Output:
+----------------------------------------------------------
+check cells=4 RP=2.22045e-16 RAP=4.59933e-16
+check cells=2 RP=2.22045e-16 RAP=2.72005e-15
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type,cascade_depth,cascade_row_cap,cascade_setup_s,cascade_order,cascade_rcond,full_states
+direct l1_error=1.00433e-13 residual_bound=2.68306e-12
+1,4,8,495,1,0.05,mg,block-cascade,1,2,1,4,2.68305975475e-12,1,0.095709125,0.000263083,0.501473886114,0,3.87475308157e-07,958906,20299776,k,2,0,0.095579375,forward,1e-08,495
+<end of output>
+Test time =   0.10 sec
+----------------------------------------------------------
+Test Passed.
+"rdme_block_cascade_forward" end time: Oct 22 14:40 PDT
+"rdme_block_cascade_forward" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 22 14:40 PDT

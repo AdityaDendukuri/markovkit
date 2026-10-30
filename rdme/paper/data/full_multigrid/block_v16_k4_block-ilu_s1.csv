@@ -1,0 +1,2 @@
+dimension,cells,cap,states,diffusion,shift,method,smoother,sweeps,cycles,step,iterations,residual_l1_bound,converged,setup_s,solve_s,mass,high_mass,min_probability,storage_bytes,peak_rss_bytes,cycle_type
+1,16,4,4845,1,0.5,mg,block-ilu,1,2,1,27,4.58186427833e-10,1,0.002707125,0.00928125,0.82128451753,0,6.54295312961e-07,1154852,5554176,standard

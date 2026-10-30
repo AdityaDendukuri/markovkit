@@ -79,10 +79,16 @@ approximate_cut_time_scores(const subnetwork<State> &D, const num::vec<real> &rh
         num::grounded_approxchol_factor(M, options.preconditioner, options.seed ^ 0x9e3779b9U);
     const auto M_operator = num::assume_spd(num::operators::sparse_op(M));
 
+    auto solve = [&](const num::vec<real> &right_hand_side, num::vec<real> &solution) {
+        real tolerance = options.tolerance * num::norm(right_hand_side);
+        return num::pcg(M_operator, approximate, right_hand_side, solution,
+                        {.tolerance = tolerance});
+    };
+
     num::vec<real> scaled_u(D.size(), 0.0);
-    auto u_solve = num::pcg(M_operator, approximate, rho, scaled_u);
+    auto u_solve = solve(rho, scaled_u);
     num::vec<real> Z1(D.size(), 0.0);
-    auto Z1_solve = num::pcg(M_operator, approximate, squared_scale, Z1);
+    auto Z1_solve = solve(squared_scale, Z1);
     if (!u_solve.converged || !Z1_solve.converged) {
         throw std::runtime_error("AC2-preconditioned cut-time solve did not converge");
     }

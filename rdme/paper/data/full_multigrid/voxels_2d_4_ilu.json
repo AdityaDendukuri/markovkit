@@ -1,0 +1,24 @@
+{
+  "command": [
+    "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid",
+    "--cycles",
+    "2",
+    "--dimension",
+    "2",
+    "--cells",
+    "4",
+    "--cap",
+    "2",
+    "--initial",
+    "2",
+    "--linear",
+    "1",
+    "--shift",
+    "0.5",
+    "--method",
+    "ilu"
+  ],
+  "status": 0,
+  "executable_sha256": "a2dcfd58cb088aace766bde57919fc53fc3eb9bfd904aef55b9d0de59f739172",
+  "wall_seconds": 0.010181999998167157
+}

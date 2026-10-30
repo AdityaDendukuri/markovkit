@@ -1,0 +1,29 @@
+{
+  "command": [
+    "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid",
+    "--cycles",
+    "2",
+    "--tolerance",
+    "1e-12",
+    "--cells",
+    "2",
+    "--initial",
+    "4",
+    "--shift",
+    "20",
+    "--steps",
+    "20",
+    "--adaptive-fsp",
+    "--fsp-tolerance",
+    "1e-07",
+    "--smoother",
+    "block-ilu",
+    "--sweeps",
+    "1",
+    "--state-output",
+    "/Users/adityadendukuri/DiscStochSim-multigrid/paper/data/adaptive_population_fsp/schlogl_refined_state.csv"
+  ],
+  "executable_sha256": "6e448e5601213bd532cb1a9839c414df28d168df9f4506b3cdcf492d6c62c521",
+  "status": 0,
+  "wall_seconds": 0.010433249990455806
+}

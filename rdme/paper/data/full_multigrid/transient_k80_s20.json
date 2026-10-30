@@ -1,0 +1,21 @@
+{
+  "command": [
+    "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid",
+    "--cycles",
+    "2",
+    "--cap",
+    "80",
+    "--steps",
+    "20",
+    "--shift",
+    "0.4",
+    "--integrator",
+    "cn",
+    "--method",
+    "mg",
+    "--output",
+    "/Users/adityadendukuri/DiscStochSim-multigrid/paper/data/full_multigrid/transient_k80_s20_marginal.csv"
+  ],
+  "status": 0,
+  "wall_seconds": 213.7115672500222
+}

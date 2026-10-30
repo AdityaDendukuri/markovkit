@@ -1,0 +1,32 @@
+{
+  "command": [
+    "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid",
+    "--cycles",
+    "2",
+    "--cells",
+    "16",
+    "--initial",
+    "2",
+    "--linear",
+    "1",
+    "--shift",
+    "0.5",
+    "--method",
+    "mg",
+    "--max-iterations",
+    "300",
+    "--cap",
+    "6",
+    "--diffusion",
+    "1",
+    "--cycles",
+    "1",
+    "--hierarchy",
+    "direct",
+    "--history",
+    "/Users/adityadendukuri/DiscStochSim-multigrid/paper/data/full_multigrid/graph_gap_cap6_direct_history.csv"
+  ],
+  "status": 2,
+  "executable_sha256": "a2dcfd58cb088aace766bde57919fc53fc3eb9bfd904aef55b9d0de59f739172",
+  "wall_seconds": 1.9558067499892786
+}

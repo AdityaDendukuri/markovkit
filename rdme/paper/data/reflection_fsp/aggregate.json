@@ -1,0 +1,40 @@
+{
+  "rare": {
+    "reference": {
+      "wall_seconds": 36.71299058297882,
+      "peak_rss_bytes": 213155840,
+      "setup_seconds": 0.12245620900000001,
+      "cpu_seconds": 36.446672
+    },
+    "structured": {
+      "wall_seconds": 18.36688691697782,
+      "peak_rss_bytes": 90136576,
+      "setup_seconds": 0.102693813,
+      "cpu_seconds": 17.919604
+    },
+    "wall_speedup": 1.9988684391061609,
+    "cpu_speedup": 2.0338994098307084,
+    "peak_memory_reduction": 0.5771329746348962,
+    "maximum_joint_l1_difference": 9.055874362250102e-15,
+    "maximum_peak20_relative_difference": 1.7290731431503352e-13
+  },
+  "adaptive": {
+    "reference": {
+      "wall_seconds": 60.02577341650613,
+      "peak_rss_bytes": 969138176,
+      "setup_seconds": 0.591491542,
+      "cpu_seconds": 59.55394599999999
+    },
+    "structured": {
+      "wall_seconds": 30.495454937510658,
+      "peak_rss_bytes": 521388032,
+      "setup_seconds": 0.35848829149999994,
+      "cpu_seconds": 29.942810499999997
+    },
+    "wall_speedup": 1.968351465472711,
+    "cpu_speedup": 1.9889230504932058,
+    "peak_memory_reduction": 0.46200857121121186,
+    "maximum_joint_l1_difference": 3.9549842149952054e-14,
+    "maximum_peak20_relative_difference": 8.521724290203742e-15
+  }
+}

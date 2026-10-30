@@ -1,0 +1,3 @@
+KLU index_bits=64 estimated_lnz=1.2794e+10 estimated_unz=1.2794e+10
+KLU factor_peak_bytes=312647344 allocation_budget_exceeded=1
+64-bit KLU factorization failed within the 2 GiB allocation budget

@@ -1,0 +1,2 @@
+PROFILE voxels=4 states=244035 cycles=2179 smooth_s=21.2022241 matvec_s=4.11580154 transfer_s=2.28487826 convergence_residual_s=3.99394078 matrix_nnz=3429511 block_factor_bytes=21260592
+PROFILE voxels=1 states=57 cycles=4358 smooth_s=0 matvec_s=0 transfer_s=0 convergence_residual_s=0 matrix_nnz=169 block_factor_bytes=0

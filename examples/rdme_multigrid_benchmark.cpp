@@ -1,9 +1,9 @@
+// plain and preconditioned GMRES for RDME resolvent solves; tidy CSV on stdout
 #include "core/types.hpp"
 #include "linear/solvers/ilu.hpp"
 #include "linear/solvers/gmres.hpp"
 #include "linear/solvers/preconditioner.hpp"
-#include "rdme/rdme.hpp"
-#include "structures/graph/structured_grid.hpp"
+#include "markovkit.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -12,6 +12,8 @@
 #include <limits>
 #include <stdexcept>
 #include <string_view>
+
+using namespace markovkit;
 
 namespace {
 
@@ -60,121 +62,80 @@ void run_case(const benchmark_case &problem) {
     dimensions.fill(problem.cells_per_axis);
     num::static_array<double, D> spacing{};
     spacing.fill(1.0 / static_cast<double>(problem.cells_per_axis));
-    num::structured_grid_graph<D> grid(dimensions, spacing);
-    rdme::voxel_domain domain(std::move(grid), num::array<double>{problem.diffusivity});
-
-    num::array<rdme::local_reaction> reactions{
-        rdme::local_reaction{{1},
-                             [](num::view<const int>, num::view<const double> parameters,
-                                double volume, double) { return parameters[0] * volume; }},
-        rdme::local_reaction{
-            {-1},
-            [](num::view<const int> counts, num::view<const double> parameters, double, double) {
-                return parameters[1] * static_cast<double>(counts[0]);
-            }}};
-    rdme::reaction_diffusion_model model(std::move(domain), std::move(reactions));
+    const double birth = 0.05 * problem.reaction_scale;
+    const double death = 0.02 * problem.reaction_scale;
+    const reaction_diffusion model{
+        voxel_domain(grid<D>(dimensions, spacing), {problem.diffusivity}),
+        {{{1}, [=](view<const int>, real volume) { return birth * volume; }},
+         {{-1}, [=](view<const int> n, real) { return death * n[0]; }}}};
 
     const auto generator_begin = clock::now();
-    rdme::restricted_generator generator(
-        std::move(model), num::array<int>{problem.max_population},
-        num::array<double>{0.05 * problem.reaction_scale, 0.02 * problem.reaction_scale}, 0.0,
-        rdme::boundary_mode::absorbing);
-    const auto generator_end = clock::now();
-    const double generator_setup_ms = milliseconds(generator_begin, generator_end);
-    const num::idx voxels = generator.model().domain().n_voxels();
+    const population_box box(model.n_voxels(), {problem.max_population});
+    const generator Q(box, model, boundary::absorbing);
+    const double generator_setup_ms = milliseconds(generator_begin, clock::now());
 
-    rdme::shifted_generator system(generator, problem.shift);
-    num::vec<double> rhs(generator.rows(), 0.0);
-    for (num::idx state = 0; state < rhs.size(); ++state) {
-        rhs[state] = 1.0 + 0.1 * std::cos(static_cast<double>(state));
+    const shifted_generator system(Q, problem.shift);
+    vec<real> rhs(Q.rows(), 0.0);
+    for (idx i = 0; i < rhs.size(); ++i) {
+        rhs[i] = 1.0 + 0.1 * std::cos(static_cast<double>(i));
     }
-    const num::gmres_options options{.tolerance = 1e-8,
-                                     .max_iterations = 500,
-                                     .restart = std::min<num::idx>(50, generator.rows())};
+    const num::gmres_options options{
+        .tolerance = 1e-8, .max_iterations = 500, .restart = std::min<idx>(50, Q.rows())};
 
-    num::vec<double> plain_solution(generator.rows(), 0.0);
-    const auto plain_begin = clock::now();
-    const auto plain = num::gmres(system, rhs, plain_solution, options);
-    const auto plain_end = clock::now();
-    const double plain_solve_ms = milliseconds(plain_begin, plain_end);
-
-    const auto jacobi_begin = clock::now();
-    num::vec<double> inverse_diagonal(generator.rows(), 0.0);
-    for (num::idx state = 0; state < generator.rows(); ++state) {
-        inverse_diagonal[state] = 1.0 / (problem.shift + generator.exit_rates()[state]);
-    }
-    num::jacobi_preconditioner jacobi(std::move(inverse_diagonal));
-    const auto jacobi_end = clock::now();
-    num::vec<double> jacobi_solution(generator.rows(), 0.0);
-    const auto jacobi_solve_begin = clock::now();
-    const auto jacobi_result = num::gmres(system, jacobi, rhs, jacobi_solution, options);
-    const auto jacobi_solve_end = clock::now();
-    const double jacobi_setup_ms = milliseconds(jacobi_begin, jacobi_end);
-    const double jacobi_solve_ms = milliseconds(jacobi_solve_begin, jacobi_solve_end);
-
-    const auto ilu_begin = clock::now();
-    num::array<num::idx> matrix_rows;
-    num::array<num::idx> matrix_columns;
-    num::array<double> matrix_values;
-    matrix_rows.reserve(generator.transitions().size() + generator.rows());
-    matrix_columns.reserve(matrix_rows.capacity());
-    matrix_values.reserve(matrix_rows.capacity());
-    for (num::idx source = 0; source < generator.rows(); ++source) {
-        matrix_rows.push_back(source);
-        matrix_columns.push_back(source);
-        matrix_values.push_back(problem.shift + generator.exit_rates()[source]);
-        for (num::idx entry = generator.source_offsets()[source];
-             entry < generator.source_offsets()[source + 1]; ++entry) {
-            matrix_rows.push_back(generator.transitions()[entry].destination);
-            matrix_columns.push_back(source);
-            matrix_values.push_back(-generator.transitions()[entry].rate);
-        }
-    }
-    const num::spmat sparse_system = num::spmat::from_triplets(
-        generator.rows(), generator.cols(), matrix_rows, matrix_columns, matrix_values);
-    const num::ilu0_preconditioner ilu(sparse_system);
-    const auto ilu_end = clock::now();
-    num::vec<double> ilu_solution(generator.rows(), 0.0);
-    const auto ilu_solve_begin = clock::now();
-    const auto ilu_result = num::gmres(system, ilu, rhs, ilu_solution, options);
-    const auto ilu_solve_end = clock::now();
-    const double ilu_setup_ms = milliseconds(ilu_begin, ilu_end);
-    const double ilu_solve_ms = milliseconds(ilu_solve_begin, ilu_solve_end);
-
-    const auto multigrid_begin = clock::now();
-    rdme::sector_diffusion_multigrid multigrid(generator.model().domain(), generator.state_space(),
-                                               problem.shift);
-    const auto multigrid_end = clock::now();
-    num::vec<double> multigrid_solution(generator.rows(), 0.0);
-    const auto multigrid_solve_begin = clock::now();
-    const auto multigrid_result = num::gmres(system, multigrid, rhs, multigrid_solution, options);
-    const auto multigrid_solve_end = clock::now();
-    const double multigrid_setup_ms = milliseconds(multigrid_begin, multigrid_end);
-    const double multigrid_solve_ms = milliseconds(multigrid_solve_begin, multigrid_solve_end);
-
-    const num::vec<double> *reference = nullptr;
-    if (plain.converged)
-        reference = &plain_solution;
-    else if (multigrid_result.converged)
-        reference = &multigrid_solution;
-    else if (ilu_result.converged)
-        reference = &ilu_solution;
-    else if (jacobi_result.converged)
-        reference = &jacobi_solution;
-    const auto difference = [&](const num::vec<double> &solution, bool converged) {
-        return reference && converged ? relative_difference(solution, *reference)
-                                      : std::numeric_limits<double>::quiet_NaN();
+    // set up a preconditioner, then solve with it, timing both
+    struct run {
+        num::solver_result result;
+        vec<real> solution;
+        double setup_ms, solve_ms;
+    };
+    const auto solve = [&](auto make_preconditioner) {
+        const auto setup_begin = clock::now();
+        const auto preconditioner = make_preconditioner();
+        const auto solve_begin = clock::now();
+        vec<real> solution(Q.rows(), 0.0);
+        const auto result = num::gmres(system, preconditioner, rhs, solution, options);
+        return run{result, std::move(solution), milliseconds(setup_begin, solve_begin),
+                   milliseconds(solve_begin, clock::now())};
     };
 
-    emit_row(problem, voxels, generator.rows(), 0, "plain", generator_setup_ms, 0.0, plain_solve_ms,
-             plain, difference(plain_solution, plain.converged));
-    emit_row(problem, voxels, generator.rows(), 0, "jacobi", generator_setup_ms, jacobi_setup_ms,
-             jacobi_solve_ms, jacobi_result, difference(jacobi_solution, jacobi_result.converged));
-    emit_row(problem, voxels, generator.rows(), 0, "ilu0", generator_setup_ms, ilu_setup_ms,
-             ilu_solve_ms, ilu_result, difference(ilu_solution, ilu_result.converged));
-    emit_row(problem, voxels, generator.rows(), multigrid.max_hierarchy_levels(), "multigrid",
-             generator_setup_ms, multigrid_setup_ms, multigrid_solve_ms, multigrid_result,
-             difference(multigrid_solution, multigrid_result.converged));
+    vec<real> plain_solution(Q.rows(), 0.0);
+    const auto plain_begin = clock::now();
+    const auto plain_result = num::gmres(system, rhs, plain_solution, options);
+    const run plain{plain_result, std::move(plain_solution), 0.0,
+                    milliseconds(plain_begin, clock::now())};
+
+    const run jacobi = solve([&] {
+        vec<real> inverse_diagonal(Q.rows(), 0.0);
+        for (idx i = 0; i < Q.rows(); ++i) {
+            inverse_diagonal[i] = 1.0 / (problem.shift + Q.exit_rates()[i]);
+        }
+        return num::jacobi_preconditioner(std::move(inverse_diagonal));
+    });
+    const run ilu = solve([&] { return num::ilu0_preconditioner(system.matrix()); });
+    std::size_t levels = 0;
+    const run multigrid = solve([&] {
+        sector_multigrid<D> preconditioner(model.domain, box, problem.shift);
+        levels = preconditioner.max_levels();
+        return preconditioner;
+    });
+
+    const run *reference = nullptr;
+    for (const run *candidate : {&plain, &multigrid, &ilu, &jacobi}) {
+        if (!reference && candidate->result.converged) {
+            reference = candidate;
+        }
+    }
+    const auto emit = [&](std::string_view method, const run &r, std::size_t run_levels) {
+        const double difference = reference && r.result.converged
+                                      ? relative_difference(r.solution, reference->solution)
+                                      : std::numeric_limits<double>::quiet_NaN();
+        emit_row(problem, model.n_voxels(), Q.rows(), run_levels, method, generator_setup_ms,
+                 r.setup_ms, r.solve_ms, r.result, difference);
+    };
+    emit("plain", plain, 0);
+    emit("jacobi", jacobi, 0);
+    emit("ilu0", ilu, 0);
+    emit("multigrid", multigrid, levels);
 }
 
 void dispatch(const benchmark_case &problem) {

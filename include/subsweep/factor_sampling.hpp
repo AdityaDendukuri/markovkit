@@ -186,8 +186,14 @@ class factor_sampler {
         // z = U 1 = L^{-1} w
         num::vec<real> z(n_, 0.0);
         for (idx j = 0; j < n_; ++j) {
+            real row_scale = 0.0;
             for (idx k = j; k < n_; ++k) {
                 z[j] += U(j, k);
+                row_scale += std::abs(U(j, k));
+            }
+            real tolerance = 1e-12 * std::max(real{1.0}, row_scale);
+            if (z[j] < 0.0 && z[j] >= -tolerance) {
+                z[j] = 0.0;
             }
         }
 

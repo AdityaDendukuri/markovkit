@@ -1,73 +1,42 @@
-#include "plot/plot.hpp"
-#include "core/types.hpp"
+// adaptive FSP for the stochastic Oregonator (Field-Koros-Noyes oscillator)
 #include "markovkit.hpp"
+#include "plot/plot.hpp"
+
+using namespace markovkit;
 
 int main() {
-    // These scales reproduce the stochastic Oregonator regime.
-    const double y1s = 500.0, y2s = 1000.0, y3s = 2000.0;
-    const double mu1s = 2000.0, mu2s = 50000.0;
+    // these scales reproduce the stochastic Oregonator regime
+    const real y1 = 500.0, y2 = 1000.0, y3 = 2000.0;
+    const real mu1 = 2000.0, mu2 = 50000.0;
+    const real k1 = mu1 / y2;              // 2.0
+    const real k2 = mu2 / (y1 * y2);       // 0.1
+    const real k3 = (mu1 + mu2) / y1;      // 104.0
+    const real k4 = 2.0 * mu1 / (y1 * y1); // 0.016
+    const real k5 = (mu1 + mu2) / y3;      // 26.0
 
-    const num::array<double> rates = {
-        mu1s / y2s,               // k1 = 2.0
-        mu2s / (y1s * y2s),       // k2 = 0.1
-        (mu1s + mu2s) / y1s,      // k3 = 104.0
-        2.0 * mu1s / (y1s * y1s), // k4 = 0.016
-        (mu1s + mu2s) / y3s,      // k5 = 26.0
-    };
+    const reaction_network model{{
+        {{1, -1, 0}, [=](const state &x) { return k1 * x[1]; }},
+        {{-1, -1, 0}, [=](const state &x) { return k2 * x[0] * x[1]; }},
+        {{1, 0, 1}, [=](const state &x) { return k3 * x[0]; }},
+        {{-2, 0, 0}, [=](const state &x) { return 0.5 * k4 * x[0] * (x[0] - 1); }},
+        {{0, 1, -1}, [=](const state &x) { return k5 * x[2]; }},
+    }};
 
-    // Five reactions couple the three oscillator species.
-    markovkit::reaction_system model;
-    model.changes = {
-        {1, -1, 0},  // R1
-        {-1, -1, 0}, // R2
-        {1, 0, 1},   // R3
-        {-2, 0, 0},  // R4
-        {0, 1, -1},  // R5
-    };
-    model.propensities = {
-        [](const markovkit::state &x, const num::array<double> &r, double) { return r[0] * x[1]; },
-        [](const markovkit::state &x, const num::array<double> &r, double) {
-            return r[1] * x[0] * x[1];
-        },
-        [](const markovkit::state &x, const num::array<double> &r, double) { return r[2] * x[0]; },
-        [](const markovkit::state &x, const num::array<double> &r, double) {
-            return x[0] < 2 ? 0.0 : r[3] * x[0] * (x[0] - 1) * 0.5;
-        },
-        [](const markovkit::state &x, const num::array<double> &r, double) { return r[4] * x[2]; },
-    };
+    // sampled expansion keeps the support small; start from the deterministic counts
+    const auto solution = solve_adaptive_fsp(model, {500, 1000, 2000}, 2.0,
+                                             {.inside = box(50000),
+                                              .flux_tolerance = 1.0,
+                                              .sampled_expansion = true});
+    const auto means = solution.means();
 
-    // The FSP starts from the deterministic reference counts.
-    fsp::fsp_problem prob;
-    prob.model = model;
-    prob.u0 = {500, 1000, 2000};
-    prob.t0 = 0.0;
-    prob.tf = 2.0;
-    prob.rates = rates;
-    prob.bc = fsp::rect_boundary(50000);
-
-    // SSA-guided expansion limits growth of the active state space.
-    fsp::adaptive_fsp_params params;
-    params.eps_dt = 1.0;
-    params.prob_quantile = 0.1;
-    params.flux_tolerance = 1.0;
-    params.expansion_depth = 1;
-    params.expand_method = fsp::expand_method::ssa;
-    params.save_interval = 1000;
-
-    // Evolve an adaptively sampled finite state space.
-    const auto solution = std::get<0>(fsp::solve_adaptive_fsp(prob, params));
-    const auto means = solution.mean_trajectory();
-
-    num::array<double> x, y, z, sizes;
-    // Extract observable curves from saved snapshots.
-    for (std::size_t i = 0; i < solution.times.size(); ++i) {
-        x.push_back(means(i, 0));
-        y.push_back(means(i, 1));
-        z.push_back(means(i, 2));
-        sizes.push_back(solution.state_space_sizes[i]);
+    array<real> x, y, z, sizes;
+    for (idx k = 0; k < solution.times.size(); ++k) {
+        x.push_back(means(k, 0));
+        y.push_back(means(k, 1));
+        z.push_back(means(k, 2));
+        sizes.push_back(real(solution.snapshots[k].size()));
     }
 
-    // Plot the three means alongside active state-space size.
     num::plt::subplot(2, 2);
     num::plt::plot(solution.times, x, "X", "lines lw 2");
     num::plt::xlabel("time");

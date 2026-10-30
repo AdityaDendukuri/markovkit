@@ -12,21 +12,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(numerics)
 
-add_library(markovkit
-    src/cme/state_space.cpp
-    src/cme/generator.cpp
-    src/fsp/solution.cpp
-    src/fsp/solvers/adaptive_fsp.cpp
-    src/fsp/solvers/krylov_fsp.cpp
-)
+# header-only, like subsweep
+add_library(markovkit INTERFACE)
 add_library(markovkit::markovkit ALIAS markovkit)
 
-target_include_directories(markovkit PUBLIC
+target_include_directories(markovkit INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
 
-target_link_libraries(markovkit PUBLIC numerics::numerics)
+target_link_libraries(markovkit INTERFACE numerics::numerics)
 
 enable_testing()
 add_subdirectory(tests)

@@ -1,0 +1,114 @@
+{
+  "model": "four-voxel Schlogl, initial (2,2,2,2), D=1",
+  "metadata": {
+    "command": [
+      "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid",
+      "--cells",
+      "4",
+      "--cap",
+      "96",
+      "--initial",
+      "8",
+      "--diffusion",
+      "1",
+      "--shift",
+      "0.4",
+      "--steps",
+      "100",
+      "--integrator",
+      "cn",
+      "--method",
+      "mg",
+      "--cycles",
+      "2",
+      "--smoother",
+      "block-ilu",
+      "--sweeps",
+      "1",
+      "--tolerance",
+      "1e-9",
+      "--output",
+      "/Users/adityadendukuri/DiscStochSim-multigrid/paper/data/full_multigrid/long_transient/schlogl_k96_dt5_t500_marginal.csv"
+    ],
+    "executable_sha256": "6e448e5601213bd532cb1a9839c414df28d168df9f4506b3cdcf492d6c62c521",
+    "status": 0,
+    "final_time": 500,
+    "dt": 5,
+    "cap": 96,
+    "wall_seconds": 1116.6758864170406
+  },
+  "snapshots": {
+    "25.0": {
+      "mass": 0.9999999256094405,
+      "missing_mass": 7.439055949021167e-08,
+      "high_basin_mass": 0.12205150848830783,
+      "modes": [
+        [
+          8,
+          0.081470388939044
+        ]
+      ],
+      "low_peak": 0.081470388939044,
+      "high_peak": null,
+      "high_to_low_peak_ratio": null
+    },
+    "100.0": {
+      "mass": 0.9999815048400795,
+      "missing_mass": 1.8495159920473014e-05,
+      "high_basin_mass": 0.45560615097150275,
+      "modes": [
+        [
+          7,
+          0.0441340357361195
+        ],
+        [
+          37,
+          0.0138520557828945
+        ]
+      ],
+      "low_peak": 0.0441340357361195,
+      "high_peak": 0.0138520557828945,
+      "high_to_low_peak_ratio": 0.3138633381664191
+    },
+    "250.0": {
+      "mass": 0.9998744247927084,
+      "missing_mass": 0.0001255752072916172,
+      "high_basin_mass": 0.6511328596065927,
+      "modes": [
+        [
+          8,
+          0.0255712514461782
+        ],
+        [
+          40,
+          0.0211978334638879
+        ]
+      ],
+      "low_peak": 0.0255712514461782,
+      "high_peak": 0.0211978334638879,
+      "high_to_low_peak_ratio": 0.8289712964773986
+    },
+    "500.0": {
+      "mass": 0.9996510546105448,
+      "missing_mass": 0.0003489453894551797,
+      "high_basin_mass": 0.6884213323266657,
+      "modes": [
+        [
+          8,
+          0.0220749488579798
+        ],
+        [
+          40,
+          0.0226462501155787
+        ]
+      ],
+      "low_peak": 0.0220749488579798,
+      "high_peak": 0.0226462501155787,
+      "high_to_low_peak_ratio": 1.0258800716266385
+    }
+  },
+  "t100_previous_run_marginal_l1": 0.0,
+  "max_residual_bound": 9.98941358658e-10,
+  "min_probability": 1.37740214442e-70,
+  "note": "Unnormalized retained probabilities. Time discretization and population truncation are distinct; no new time-step refinement is claimed."
+}

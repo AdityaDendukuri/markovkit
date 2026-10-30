@@ -1,9 +1,9 @@
+// diffusing A + B -> nothing: Laplace transform of the annihilation time via resolvent solves
 #include "core/types.hpp"
 #include "linear/expv/expv.hpp"
 #include "linear/solvers/gmres.hpp"
 #include "plot/plot.hpp"
-#include "rdme/rdme.hpp"
-#include "structures/graph/structured_grid.hpp"
+#include "markovkit.hpp"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -14,6 +14,8 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+
+using namespace markovkit;
 
 namespace {
 
@@ -53,6 +55,13 @@ num::array<plot_record> plot_records;
 
 double milliseconds(clock::time_point begin, clock::time_point end) {
     return std::chrono::duration<double, std::milli>(end - begin).count();
+}
+
+// A + B -> nothing at rate k a b / V, with both species diffusing on a grid
+template <std::size_t D>
+reaction_diffusion<grid<D>> annihilation(grid<D> cells, double diffusivity, double k) {
+    return {voxel_domain(std::move(cells), {diffusivity, diffusivity}),
+            {{{-1, -1}, [=](view<const int> n, real volume) { return k * n[0] * n[1] / volume; }}}};
 }
 
 template <typename Preconditioner, typename System>
@@ -203,47 +212,28 @@ void save_solver_plot() {
 }
 
 void save_configuration_density_plot() {
-    constexpr num::idx cells = 32;
+    constexpr idx cells = 32;
     constexpr double spacing = 1.0 / static_cast<double>(cells);
-    num::structured_grid_graph<1> grid({cells}, {spacing});
-    rdme::voxel_domain domain(std::move(grid), num::array<double>{1.0, 1.0});
-    num::array<rdme::local_reaction> reactions{rdme::local_reaction{
-        {-1, -1},
-        [](num::view<const int> counts, num::view<const double> parameters, double volume, double) {
-            return parameters[0] * static_cast<double>(counts[0] * counts[1]) / volume;
-        }}};
-    rdme::reaction_diffusion_model model(std::move(domain), std::move(reactions));
-    rdme::restricted_generator generator(std::move(model), num::array<int>{1, 1},
-                                         num::array<double>{10.0});
+    const auto model = annihilation(grid<1>({cells}, {spacing}), 1.0, 10.0);
+    const population_box box(cells, {1, 1});
+    const generator Q(box, model);
 
-    rdme::configuration initial_configuration(generator.state_space().layout().size(), 0);
-    initial_configuration[generator.state_space().layout().index(0, 0)] = 1;
-    initial_configuration[generator.state_space().layout().index(cells - 1, 1)] = 1;
-    num::vec<double> initial(generator.rows(), 0.0);
-    initial[generator.state_space().find(initial_configuration)] = 1.0;
-
-    num::idx joint_sector = rdme::reaction_state_space::npos;
-    for (num::idx sector = 0; sector < generator.state_space().n_sectors(); ++sector) {
-        if (generator.state_space().sector_totals()[sector] == num::array<int>({1, 1})) {
-            joint_sector = sector;
-            break;
-        }
-    }
-    if (joint_sector == rdme::reaction_state_space::npos)
-        throw std::logic_error("two-particle sector is absent");
-    const num::idx joint_begin = generator.state_space().sector_offsets()[joint_sector];
-    const num::idx joint_end = generator.state_space().sector_offsets()[joint_sector + 1];
+    state initial_state(2 * cells, 0);
+    initial_state[model.index(0, 0)] = 1;
+    initial_state[model.index(cells - 1, 1)] = 1;
+    vec<real> probability(Q.rows(), 0.0);
+    probability[*box.find(initial_state)] = 1.0;
+    const idx joint = *box.find_sector({1, 1});
 
     const num::static_array<double, 4> times{0.002, 0.02, 0.1, 0.5};
-    num::static_array<num::vec<double>, 4> densities;
+    num::static_array<vec<real>, 4> densities;
     num::static_array<double, 4> survival{};
     num::static_array<double, 4> color_max{};
-    num::vec<double> probability = initial;
     double current_time = 0.0;
     for (std::size_t snapshot = 0; snapshot < times.size(); ++snapshot) {
         while (current_time < times[snapshot]) {
             const double step = std::min(0.005, times[snapshot] - current_time);
-            probability = num::expv(step, generator, probability, 40, 1e-12);
+            probability = num::expv(step, Q, probability, 40, 1e-12);
             current_time += step;
         }
         double total_probability = 0.0;
@@ -254,21 +244,15 @@ void save_configuration_density_plot() {
         }
         if (std::abs(total_probability - 1.0) > 1e-8 || minimum_probability < -1e-10)
             throw std::runtime_error("transient RDME probability check failed");
-        densities[snapshot] = num::vec<double>(cells * cells, 0.0);
-        for (num::idx state = joint_begin; state < joint_end; ++state) {
-            const auto &configuration = generator.state_space()[state];
-            num::idx a_voxel = cells;
-            num::idx b_voxel = cells;
-            for (num::idx voxel = 0; voxel < cells; ++voxel) {
-                const auto &layout = generator.state_space().layout();
-                if (configuration[layout.index(voxel, 0)] == 1)
-                    a_voxel = voxel;
-                if (configuration[layout.index(voxel, 1)] == 1)
-                    b_voxel = voxel;
+        densities[snapshot] = vec<real>(cells * cells, 0.0);
+        for (idx i = box.sector_begin(joint); i < box.sector_end(joint); ++i) {
+            // the one A molecule and the one B molecule
+            idx a_voxel = 0, b_voxel = 0;
+            for (idx voxel = 0; voxel < cells; ++voxel) {
+                a_voxel += voxel * box[i][model.index(voxel, 0)];
+                b_voxel += voxel * box[i][model.index(voxel, 1)];
             }
-            if (a_voxel == cells || b_voxel == cells)
-                throw std::logic_error("invalid two-particle configuration");
-            const double mass = std::max(0.0, probability[state]);
+            const double mass = std::max(0.0, probability[i]);
             densities[snapshot][a_voxel * cells + b_voxel] = mass;
             survival[snapshot] += mass;
             color_max[snapshot] = std::max(color_max[snapshot], mass);
@@ -313,72 +297,49 @@ void run_case(const benchmark_case &problem) {
     dimensions.fill(problem.cells_per_axis);
     num::static_array<double, D> spacing{};
     spacing.fill(1.0 / static_cast<double>(problem.cells_per_axis));
-    num::structured_grid_graph<D> grid(dimensions, spacing);
-    rdme::voxel_domain domain(std::move(grid),
-                              num::array<double>{problem.diffusivity, problem.diffusivity});
-    num::array<rdme::local_reaction> reactions{rdme::local_reaction{
-        {-1, -1},
-        [](num::view<const int> counts, num::view<const double> parameters, double volume, double) {
-            return parameters[0] * static_cast<double>(counts[0] * counts[1]) / volume;
-        }}};
-    rdme::reaction_diffusion_model model(std::move(domain), std::move(reactions));
+    const auto model =
+        annihilation(grid<D>(dimensions, spacing), problem.diffusivity, problem.reaction_rate);
+    const idx voxels = model.n_voxels();
 
     const auto generator_begin = clock::now();
-    rdme::restricted_generator generator(std::move(model), num::array<int>{1, 1},
-                                         num::array<double>{problem.reaction_rate});
-    const auto generator_end = clock::now();
-    const double generator_setup_ms = milliseconds(generator_begin, generator_end);
-    rdme::shifted_generator system(generator, problem.shift);
+    const population_box box(voxels, {1, 1});
+    const generator Q(box, model);
+    const double generator_setup_ms = milliseconds(generator_begin, clock::now());
+    const shifted_generator system(Q, problem.shift);
 
-    num::idx joint_sector = rdme::reaction_state_space::npos;
-    for (num::idx sector = 0; sector < generator.state_space().n_sectors(); ++sector) {
-        if (generator.state_space().sector_totals()[sector] == num::array<int>({1, 1})) {
-            joint_sector = sector;
-            break;
-        }
-    }
-    if (joint_sector == rdme::reaction_state_space::npos)
-        throw std::logic_error("two-particle sector is absent");
-    const num::idx joint_begin = generator.state_space().sector_offsets()[joint_sector];
-    const num::idx joint_end = generator.state_space().sector_offsets()[joint_sector + 1];
-    const num::idx vacuum = generator.state_space().find(
-        rdme::configuration(generator.state_space().layout().size(), 0));
-    num::vec<double> reaction_rates(generator.rows(), 0.0);
-    for (num::idx state = joint_begin; state < joint_end; ++state) {
-        const auto &configuration = generator.state_space()[state];
-        for (num::idx voxel = 0; voxel < generator.model().domain().n_voxels(); ++voxel) {
-            const auto &layout = generator.state_space().layout();
-            reaction_rates[state] += problem.reaction_rate *
-                                     static_cast<double>(configuration[layout.index(voxel, 0)] *
-                                                         configuration[layout.index(voxel, 1)]) /
-                                     generator.model().domain().voxel_volume(voxel);
+    const idx joint = *box.find_sector({1, 1});
+    const idx joint_begin = box.sector_begin(joint);
+    const idx joint_end = box.sector_end(joint);
+    const idx vacuum = *box.find(state(2 * voxels, 0));
+    // the annihilation rate out of each two-particle state
+    vec<real> reaction_rates(Q.rows(), 0.0);
+    for (idx i = joint_begin; i < joint_end; ++i) {
+        for (const auto &jump : Q.jumps(i)) {
+            if (jump.to == vacuum) {
+                reaction_rates[i] += jump.rate;
+            }
         }
     }
 
     const auto multigrid_begin = clock::now();
-    rdme::sector_diffusion_multigrid multigrid(generator.model().domain(), generator.state_space(),
-                                               problem.shift);
-    const auto multigrid_end = clock::now();
-    const double multigrid_setup_ms = milliseconds(multigrid_begin, multigrid_end);
+    const sector_multigrid<D> multigrid(model.domain, box, problem.shift);
+    const double multigrid_setup_ms = milliseconds(multigrid_begin, clock::now());
     const num::gmres_options options{.tolerance = 1e-9,
                                      .max_iterations = 1000,
-                                     .restart = std::min<num::idx>(50, generator.rows())};
-    const num::idx voxels = generator.model().domain().n_voxels();
+                                     .restart = std::min<idx>(50, Q.rows())};
 
     for (const bool separated : {false, true}) {
-        const num::idx a_voxel = 0;
-        const num::idx b_voxel = separated ? voxels - 1 : 0;
-        rdme::configuration initial(generator.state_space().layout().size(), 0);
-        initial[generator.state_space().layout().index(a_voxel, 0)] = 1;
-        initial[generator.state_space().layout().index(b_voxel, 1)] = 1;
-        num::vec<double> rhs(generator.rows(), 0.0);
-        rhs[generator.state_space().find(initial)] = 1.0;
+        state initial(2 * voxels, 0);
+        initial[model.index(0, 0)] = 1;
+        initial[model.index(separated ? voxels - 1 : 0, 1)] = 1;
+        vec<real> rhs(Q.rows(), 0.0);
+        rhs[*box.find(initial)] = 1.0;
 
         const observation plain = solve_plain(system, rhs, vacuum, joint_begin, joint_end,
                                               problem.shift, reaction_rates, options);
         const observation accelerated =
             solve(system, multigrid, rhs, vacuum, joint_begin, joint_end, problem.shift,
-                  reaction_rates, options, multigrid_setup_ms, multigrid.max_hierarchy_levels());
+                  reaction_rates, options, multigrid_setup_ms, multigrid.max_levels());
         const double reference =
             plain.solver.converged ? plain.laplace_transform : accelerated.laplace_transform;
         const double separation =
@@ -386,10 +347,10 @@ void run_case(const benchmark_case &problem) {
                             (1.0 - 1.0 / static_cast<double>(problem.cells_per_axis))
                       : 0.0;
         const std::string_view initial_condition = separated ? "opposite_corners" : "colocated";
-        emit(problem, voxels, generator.rows(), initial_condition, separation, "plain", plain,
+        emit(problem, voxels, Q.rows(), initial_condition, separation, "plain", plain, reference,
+             generator_setup_ms);
+        emit(problem, voxels, Q.rows(), initial_condition, separation, "multigrid", accelerated,
              reference, generator_setup_ms);
-        emit(problem, voxels, generator.rows(), initial_condition, separation, "multigrid",
-             accelerated, reference, generator_setup_ms);
     }
 }
 

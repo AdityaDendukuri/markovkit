@@ -1,0 +1,43 @@
+{
+  "command": [
+    "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/schlogl_spatial_front",
+    "--cells",
+    "4",
+    "--seeded",
+    "0",
+    "--volume",
+    ".25",
+    "--jump",
+    "16",
+    "--low",
+    "0",
+    "--paths",
+    "1000000",
+    "--final-time",
+    "500",
+    "--interval",
+    "500",
+    "--seed",
+    "20261022",
+    "--output-prefix",
+    "/Users/adityadendukuri/DiscStochSim-multigrid/paper/data/rare_switching/rare_peak_ssa_p1000000",
+    "--c1",
+    "0.0258",
+    "--c2",
+    "0.0024",
+    "--c3",
+    "0.00138",
+    "--c4",
+    "0.0829"
+  ],
+  "executable_sha256": "3dc9e1a7d36c24356d2ddff2445e23646d4c6cb439fa25b00ad2897ffae7fb1c",
+  "status": 0,
+  "rates": [
+    0.0258,
+    0.0024,
+    0.00138,
+    0.0829
+  ],
+  "model": "four reflecting voxels, total volume 1, D=1, initial (0,0,0,0), T=500",
+  "wall_seconds": 12.188766750041395
+}

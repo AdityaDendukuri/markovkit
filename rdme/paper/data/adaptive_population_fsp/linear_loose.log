@@ -1,0 +1,9 @@
+check cells=4 RP=0 RAP=0
+check cells=2 RP=0 RAP=0
+expand step=1 cap=0 -> 4 missing_mass=0.285714 budget=0.0001
+check cells=4 RP=1.11022e-16 RAP=1.34274e-16
+check cells=2 RP=0 RAP=2.91967e-16
+expand step=1 cap=4 -> 8 missing_mass=0.000741565 budget=0.0001
+check cells=4 RP=2.22045e-16 RAP=4.2941e-16
+check cells=2 RP=2.22045e-16 RAP=1.74479e-16
+adaptive FSP complete: cap=8 expansions=2; loss budget excludes time-discretization error

@@ -1,0 +1,32 @@
+{
+  "command": [
+    "/Users/adityadendukuri/DiscStochSim-multigrid/cpp/build/rdme_full_multigrid",
+    "--cycles",
+    "2",
+    "--cells",
+    "4",
+    "--cap",
+    "80",
+    "--initial",
+    "8",
+    "--diffusion",
+    "1",
+    "--shift",
+    "0.4",
+    "--steps",
+    "20",
+    "--integrator",
+    "cn",
+    "--method",
+    "mg",
+    "--smoother",
+    "block-ilu",
+    "--sweeps",
+    "1",
+    "--output",
+    "/Users/adityadendukuri/DiscStochSim-multigrid/paper/data/full_multigrid/bistability_block_k80_s20_marginal.csv"
+  ],
+  "status": 0,
+  "executable_sha256": "936380ba050c11b0e05870525efcc39240c5249f1f0197e3047d28a8095e1cf2",
+  "wall_seconds": 128.53303775002132
+}

@@ -1,0 +1,1 @@
+attempt,step,time,cap,states,accepted,iterations,residual_l1_bound,missing_mass,algebraic_error_bound,loss_budget,setup_s,solve_s,total_setup_s,total_solve_s,peak_rss_bytes

@@ -1,0 +1,38 @@
+{
+  "linear_loose": {
+    "final_cap": 8,
+    "peak_states": 495,
+    "reference_states": 46376,
+    "expansions": 2,
+    "final_missing_mass": 0.00042255223301457256,
+    "reference_l1": 0.00042255223288885434,
+    "total_seconds": 0.004035
+  },
+  "linear_mid": {
+    "final_cap": 12,
+    "peak_states": 1820,
+    "reference_states": 46376,
+    "expansions": 3,
+    "final_missing_mass": 8.34153363937773e-07,
+    "reference_l1": 8.341532395129328e-07,
+    "total_seconds": 0.014170333999999998
+  },
+  "linear_tight": {
+    "final_cap": 17,
+    "peak_states": 5985,
+    "reference_states": 46376,
+    "expansions": 4,
+    "final_missing_mass": 4.866155134397587e-08,
+    "reference_l1": 4.8661435638277645e-08,
+    "total_seconds": 0.032167419
+  },
+  "schlogl": {
+    "final_cap": 17,
+    "states": 171,
+    "reference_l1": 2.0631474549781776e-08
+  },
+  "time_refinement": {
+    "dt_point1_l1": 0.0362302081846308,
+    "dt_point05_l1": 0.018457824123956308
+  }
+}

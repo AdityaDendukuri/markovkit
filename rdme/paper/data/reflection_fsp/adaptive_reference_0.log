@@ -1,0 +1,17 @@
+expand step=1 cap=8 -> 12 missing_mass=0.524972 budget=1e-06
+FSP reused rows=330 block_factors=9 transfer_entries=495 hierarchy_setup_items=932
+expand step=1 cap=12 -> 17 missing_mass=0.0498443 budget=1e-06
+FSP reused rows=1365 block_factors=13 transfer_entries=1820 hierarchy_setup_items=3392
+expand step=1 cap=17 -> 23 missing_mass=0.00449697 budget=1e-06
+FSP reused rows=4845 block_factors=18 transfer_entries=5985 hierarchy_setup_items=11207
+expand step=1 cap=23 -> 30 missing_mass=0.000491298 budget=1e-06
+FSP reused rows=14950 block_factors=24 transfer_entries=17550 hierarchy_setup_items=33147
+expand step=1 cap=30 -> 39 missing_mass=6.93787e-05 budget=1e-06
+FSP reused rows=40920 block_factors=31 transfer_entries=46376 hierarchy_setup_items=88349
+expand step=1 cap=39 -> 50 missing_mass=9.70345e-06 budget=1e-06
+FSP reused rows=111930 block_factors=40 transfer_entries=123410 hierarchy_setup_items=237059
+expand step=1 cap=50 -> 64 missing_mass=1.21893e-06 budget=1e-06
+FSP reused rows=292825 block_factors=51 transfer_entries=316251 hierarchy_setup_items=611829
+expand step=3 cap=64 -> 82 missing_mass=3.28942e-06 budget=3e-06
+FSP reused rows=766480 block_factors=65 transfer_entries=814385 hierarchy_setup_items=1585284
+adaptive FSP complete: cap=82 expansions=8; loss budget excludes time-discretization error

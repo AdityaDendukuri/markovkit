@@ -1,0 +1,46 @@
+{
+  "schlogl": {
+    "joint_l1_difference": 1.3290494385412762e-16,
+    "states": 1820
+  },
+  "2d": {
+    "joint_l1_difference": 8.472811386611938e-17,
+    "states": 495
+  },
+  "3d": {
+    "joint_l1_difference": 7.946354891371493e-17,
+    "states": 495
+  },
+  "zero_diffusion": {
+    "joint_l1_difference": 1.6285118309637732e-24,
+    "states": 495
+  },
+  "linear": {
+    "joint_l1_difference": 3.0451173266971e-16,
+    "states": 969
+  },
+  "direct": {
+    "joint_l1_difference": 1.6633249099113434e-16,
+    "states": 495
+  },
+  "v": {
+    "joint_l1_difference": 7.750364288676343e-17,
+    "states": 495
+  },
+  "k": {
+    "joint_l1_difference": 2.0100572678434624e-16,
+    "states": 495
+  },
+  "gmres": {
+    "joint_l1_difference": 1.4357985625233109e-15,
+    "states": 495
+  },
+  "cn": {
+    "joint_l1_difference": 2.486859616381064e-16,
+    "states": 495
+  },
+  "adaptive": {
+    "joint_l1_difference": 1.6010483391770522e-16,
+    "states": 1820
+  }
+}

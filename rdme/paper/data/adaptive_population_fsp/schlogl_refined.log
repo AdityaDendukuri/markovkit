@@ -1,0 +1,4 @@
+expand step=1 cap=4 -> 8 missing_mass=0.0357079 budget=5e-09
+expand step=1 cap=8 -> 12 missing_mass=1.23477e-07 budget=5e-09
+expand step=11 cap=12 -> 17 missing_mass=6.81501e-08 budget=5.5e-08
+adaptive FSP complete: cap=17 expansions=3; loss budget excludes time-discretization error

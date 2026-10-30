@@ -1,86 +1,54 @@
-#include "plot/plot.hpp"
-#include "core/types.hpp"
+// adaptive FSP for a bistable genetic toggle switch
 #include "markovkit.hpp"
+#include "plot/plot.hpp"
+
+using namespace markovkit;
 
 int main() {
-    // Mutual cubic repression creates two preferred expression states.
-    const double alpha = 20.0;
-    const double beta = 400.0;
-    const double K = 100.0;
-    const double d_u = 1.0 + (0.1 / 1.1);
-    const double d_v = 1.0;
-    const double K3 = K * K * K;
+    // mutual cubic repression creates two preferred expression states
+    const real alpha = 20.0, beta = 400.0, K3 = 100.0 * 100.0 * 100.0;
+    const real d_u = 1.0 + (0.1 / 1.1), d_v = 1.0;
 
-    const num::array<double> rates = {alpha, beta, K3, d_u, alpha, beta, K3, d_v};
+    const reaction_network model{{
+        {{1, 0}, [=](const state &x) { return alpha + (beta * K3 / (K3 + std::pow(x[1], 3))); }},
+        {{-1, 0}, [=](const state &x) { return d_u * x[0]; }},
+        {{0, 1}, [=](const state &x) { return alpha + (beta * K3 / (K3 + std::pow(x[0], 3))); }},
+        {{0, -1}, [=](const state &x) { return d_v * x[1]; }},
+    }};
 
-    markovkit::reaction_system model;
-    model.changes = {
-        {1, 0},  // R1: 0 -> U
-        {-1, 0}, // R2: U -> 0
-        {0, 1},  // R3: 0 -> V
-        {0, -1}, // R4: V -> 0
-    };
-    model.propensities = {
-        [](const markovkit::state &x, const num::array<double> &r, double) {
-            double v3 = static_cast<double>(x[1]) * x[1] * x[1];
-            return r[0] + (r[1] * r[2] / (r[2] + v3));
-        },
-        [](const markovkit::state &x, const num::array<double> &r, double) { return r[3] * x[0]; },
-        [](const markovkit::state &x, const num::array<double> &r, double) {
-            double u3 = static_cast<double>(x[0]) * x[0] * x[0];
-            return r[4] + (r[5] * r[6] / (r[6] + u3));
-        },
-        [](const markovkit::state &x, const num::array<double> &r, double) { return r[7] * x[1]; },
-    };
+    // absolute pruning keeps the support compact
+    const auto solution = solve_adaptive_fsp(model, {100, 100}, 10.0,
+                                             {.inside = box(500),
+                                              .step_scale = 10.0,
+                                              .prune_fraction = 0.0,
+                                              .flux_tolerance = 0.0,
+                                              .min_probability = 1e-6,
+                                              .layers = 5,
+                                              .save_every = 200});
+    const auto means = solution.means();
 
-    // The distribution starts at the symmetric expression state.
-    fsp::fsp_problem prob;
-    prob.model = model;
-    prob.u0 = {100, 100};
-    prob.t0 = 0.0;
-    prob.tf = 10.0;
-    prob.rates = rates;
-    prob.bc = fsp::rect_boundary(500);
-
-    // Absolute pruning keeps the adaptive support compact.
-    fsp::adaptive_fsp_params params;
-    params.eps_dt = 10.0;
-    params.prob_quantile = 0.0;
-    params.flux_tolerance = 0.0;
-    params.abs_threshold = 1e-6;
-    params.expansion_depth = 5;
-    params.save_interval = 200;
-
-    // Track the transient distribution on an adaptive state space.
-    const auto solution = std::get<0>(fsp::solve_adaptive_fsp(prob, params));
-    const auto means = solution.mean_trajectory();
-
-    num::array<double> u, v, sizes;
-    for (std::size_t i = 0; i < solution.times.size(); ++i) {
-        u.push_back(means(i, 0));
-        v.push_back(means(i, 1));
-        sizes.push_back(solution.state_space_sizes[i]);
+    array<real> u, v, sizes;
+    for (idx k = 0; k < solution.times.size(); ++k) {
+        u.push_back(means(k, 0));
+        v.push_back(means(k, 1));
+        sizes.push_back(real(solution.snapshots[k].size()));
     }
 
-    const int last = solution.n_snapshots() - 1;
-    // Reduce the final joint distribution to U and V marginals.
-    const auto marginal_u = solution.marginal(last, 0);
-    const auto marginal_v = solution.marginal(last, 1);
-    num::array<double> counts_u, probs_u, counts_v, probs_v;
-    for (int c = 0; c <= 500; ++c) {
-        const double pu = marginal_u.contains(c) ? marginal_u.at(c) : 0.0;
-        const double pv = marginal_v.contains(c) ? marginal_v.at(c) : 0.0;
-        if (pu > 1e-8) {
-            counts_u.push_back(c);
-            probs_u.push_back(pu);
+    // the final U and V marginals
+    array<real> counts_u, probs_u, counts_v, probs_v;
+    for (const auto &[count, p] : solution.snapshots.back().marginal(0)) {
+        if (p > 1e-8) {
+            counts_u.push_back(count);
+            probs_u.push_back(p);
         }
-        if (pv > 1e-8) {
-            counts_v.push_back(c);
-            probs_v.push_back(pv);
+    }
+    for (const auto &[count, p] : solution.snapshots.back().marginal(1)) {
+        if (p > 1e-8) {
+            counts_v.push_back(count);
+            probs_v.push_back(p);
         }
     }
 
-    // Plot transient means, support size, and terminal marginals.
     num::plt::subplot(2, 2);
     num::plt::plot(solution.times, u, "U", "lines lw 2");
     num::plt::plot(solution.times, v, "V", "lines lw 2");
