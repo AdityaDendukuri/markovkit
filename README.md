@@ -81,7 +81,7 @@ cmake --build build -j8
 ctest --test-dir build --output-on-failure
 ```
 
-Programs in `examples/`: `fsp_oregonator`, `fsp_toggle_switch`, `ssa_birth_death`,
+Programs in `examples/`: `fsp_birth_death`, `fsp_oregonator`, `fsp_toggle_switch`, `ssa_birth_death`,
 `rdme_multigrid_benchmark`, `rdme_two_particle_annihilation`, `rdme_multigrid_analysis`.
 
 `include/subsweep/` is vendored from the `else` repository. `rdme/` holds the standalone
