@@ -80,9 +80,8 @@ approximate_cut_time_scores(const subnetwork<State> &D, const num::vec<real> &rh
     const auto M_operator = num::assume_spd(num::operators::sparse_op(M));
 
     auto solve = [&](const num::vec<real> &right_hand_side, num::vec<real> &solution) {
-        real tolerance = options.tolerance * num::norm(right_hand_side);
         return num::pcg(M_operator, approximate, right_hand_side, solution,
-                        {.tolerance = tolerance});
+                        {.tolerance = {.rtol = options.tolerance}});
     };
 
     num::vec<real> scaled_u(D.size(), 0.0);

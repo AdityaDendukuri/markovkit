@@ -84,7 +84,9 @@ class generator {
     [[nodiscard]] num::spmat matrix() const { return assemble(0.0, 1.0); }
 
     // shift I - Q, assembled
-    [[nodiscard]] num::spmat shifted_matrix(real shift) const { return assemble(shift, -1.0); }
+    [[nodiscard]] num::spmat characteristic_matrix(real shift) const {
+        return assemble(shift, -1.0);
+    }
 
   private:
     // sign * (Q - shift I)
@@ -123,7 +125,7 @@ class shifted_generator {
     [[nodiscard]] real shift() const { return shift_; }
 
     void apply(const vec<real> &x, vec<real> &y) const { Q_->apply_shifted(shift_, x, y); }
-    [[nodiscard]] num::spmat matrix() const { return Q_->shifted_matrix(shift_); }
+    [[nodiscard]] num::spmat matrix() const { return Q_->characteristic_matrix(shift_); }
 
   private:
     const generator *Q_;

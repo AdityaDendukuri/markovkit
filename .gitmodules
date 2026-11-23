@@ -1,0 +1,4 @@
+[submodule "ext/numerics"]
+	path = ext/numerics
+	url = https://github.com/AdityaDendukuri/numerics.git
+	branch = main

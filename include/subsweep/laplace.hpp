@@ -7,6 +7,7 @@
 #include "linear/sparse/sparse.hpp"
 #include "quadrature/talbot.hpp"
 #include <algorithm>
+#include <exception>
 #include <stdexcept>
 
 namespace subsweep {
@@ -43,7 +44,8 @@ struct sweep_transform {
 // the local densities of each subnetwork at the contour `nodes`
 [[nodiscard]] inline num::array<num::vec<real>>
 inverse_laplace(num::view<const sweep_transform> transforms, num::idx initial_row,
-                num::view<const num::contour_node> nodes) {
+                num::view<const num::contour_node> nodes,
+                num::auto_resolvent_options options = {}) {
     if (transforms.empty() || nodes.empty() || initial_row >= transforms.front().R.n_rows()) {
         throw std::invalid_argument(
             "Laplace reconstruction needs transforms, contour nodes, and an initial row");
@@ -60,19 +62,20 @@ inverse_laplace(num::view<const sweep_transform> transforms, num::idx initial_ro
             (T.n_rows() != transforms[k + 1].R.n_rows() || T.n_cols() != R.n_rows())) {
             throw std::invalid_argument("T must map one sweep to the next");
         }
-        resolvent.emplace_back(num::scaled(num::transpose(R), -1.0));
+        resolvent.emplace_back(num::scaled(num::transpose(R), -1.0), options);
         result.emplace_back(R.n_rows(), 0.0);
     }
 
-    // at each node s: x^(k) = (sI + R_k^T)^{-1} a^(k), and a^(k+1) = T_k x^(k)
-    for (const auto &[s, weight] : nodes) {
+    auto evaluate = [&](const num::contour_node &node) {
+        const auto &[s, weight] = node;
+        auto local = result;
         num::vec<num::cplx> a(transforms.front().R.n_rows(), 0.0);
         a[initial_row] = 1.0;
         for (num::idx k = 0; k < transforms.size(); ++k) {
             num::vec<num::cplx> x;
             num::solve(num::shift(resolvent[k], s), a, x);
             for (num::idx i = 0; i < x.size(); ++i) {
-                result[k][i] += (weight * x[i]).real();
+                local[k][i] = (weight * x[i]).real();
             }
             if (k + 1 == transforms.size()) {
                 break;
@@ -83,6 +86,31 @@ inverse_laplace(num::view<const sweep_transform> transforms, num::idx initial_ro
                 for (num::idx entry = T.row_ptr()[i]; entry < T.row_ptr()[i + 1]; ++entry) {
                     a[i] += T.values()[entry] * x[T.col_idx()[entry]];
                 }
+            }
+        }
+        return local;
+    };
+
+    // Nodes are independent. Sum their contributions in node order for a reproducible result.
+    num::array<num::array<num::vec<real>>> contribution(nodes.size());
+    num::array<std::exception_ptr> failure(nodes.size());
+#if defined(_OPENMP)
+#pragma omp parallel for schedule(static)
+#endif
+    for (num::idx node = 0; node < nodes.size(); ++node) {
+        try {
+            contribution[node] = evaluate(nodes[node]);
+        } catch (...) {
+            failure[node] = std::current_exception();
+        }
+    }
+    for (num::idx node = 0; node < nodes.size(); ++node) {
+        if (failure[node]) {
+            std::rethrow_exception(failure[node]);
+        }
+        for (num::idx k = 0; k < contribution[node].size(); ++k) {
+            for (num::idx i = 0; i < contribution[node][k].size(); ++i) {
+                result[k][i] += contribution[node][k][i];
             }
         }
     }

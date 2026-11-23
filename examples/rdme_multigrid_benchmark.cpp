@@ -79,8 +79,9 @@ void run_case(const benchmark_case &problem) {
     for (idx i = 0; i < rhs.size(); ++i) {
         rhs[i] = 1.0 + 0.1 * std::cos(static_cast<double>(i));
     }
-    const num::gmres_options options{
-        .tolerance = 1e-8, .max_iterations = 500, .restart = std::min<idx>(50, Q.rows())};
+    const num::gmres_options options{.tolerance = 1e-8,
+                                     .max_iterations = 500,
+                                     .restart = std::min<idx>(50, Q.rows())};
 
     // set up a preconditioner, then solve with it, timing both
     struct run {

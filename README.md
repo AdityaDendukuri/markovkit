@@ -1,6 +1,8 @@
 # MarkovKit
 
-Header-only C++20 library for continuous-time Markov chains: FSP, SSA, and the RDME.
+Header-only C++20 library for general continuous-time Markov chains. Because stochastic
+reaction systems were a big part of my PhD, it naturally has nice infrastructure for them
+(reaction networks, FSP, SSA, and the RDME).
 Requires [Numerics](../numerics) in an adjacent directory.
 
 ```cpp
@@ -26,9 +28,10 @@ concept state_space = requires(const Space &space, const state &x, idx i) {
 };
 ```
 
-Models: `reaction_network`, `reaction_diffusion<Graph>`.
-Spaces: `distribution`, `population_sector`, `population_box`.
-Any model on any space gives a `generator`.
+Any `markov_model` works with the solvers, and any model on any `state_space` gives a `generator`.
+For stochastic reaction systems:
+- Models: `reaction_network`, `reaction_diffusion<Graph>`.
+- Spaces: `distribution`, `population_sector`, `population_box`.
 
 ## Examples
 
@@ -76,6 +79,7 @@ num::gmres(A, M, b, x);
 ## Build
 
 ```bash
+git submodule update --init
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j8
 ctest --test-dir build --output-on-failure

@@ -235,7 +235,9 @@ void test_multigrid_preconditions_resolvent() {
     for (idx i = 0; i < b.size(); ++i) {
         b[i] = 1.0 + 0.1 * std::cos(real(i));
     }
-    const num::gmres_options options{.tolerance = 1e-10, .max_iterations = 200, .restart = Q.rows()};
+    const num::gmres_options options{.tolerance = 1e-10,
+                                     .max_iterations = 200,
+                                     .restart = Q.rows()};
     vec<real> x_plain(Q.rows(), 0.0), x_mg(Q.rows(), 0.0);
     const auto plain = num::gmres(A, b, x_plain, options);
     const auto mg = num::gmres(A, preconditioner, b, x_mg, options);
@@ -260,7 +262,9 @@ void test_two_particle_annihilation_transform() {
     constexpr real shift = 0.5;
     const shifted_generator A(Q, shift);
     const sector_multigrid preconditioner(model.domain, box, shift);
-    const num::gmres_options options{.tolerance = 1e-12, .max_iterations = 100, .restart = Q.rows()};
+    const num::gmres_options options{.tolerance = 1e-12,
+                                     .max_iterations = 100,
+                                     .restart = Q.rows()};
     const idx joint = *box.find_sector({1, 1});
     const idx vacuum = *box.find(state(8, 0));
 

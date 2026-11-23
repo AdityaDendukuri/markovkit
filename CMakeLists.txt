@@ -6,9 +6,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
+set(MARKOVKIT_NUMERICS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/ext/numerics"
+    CACHE PATH "numerics source tree")
+if(NOT EXISTS "${MARKOVKIT_NUMERICS_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR "numerics was not found at ${MARKOVKIT_NUMERICS_DIR}. "
+                        "Run `git submodule update --init`, or set MARKOVKIT_NUMERICS_DIR.")
+endif()
 FetchContent_Declare(
     numerics
-    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../numerics"
+    SOURCE_DIR "${MARKOVKIT_NUMERICS_DIR}"
 )
 FetchContent_MakeAvailable(numerics)
 
